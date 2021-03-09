@@ -44,7 +44,7 @@ typedef struct AudioEngine AudioEngine;
  */
 
 #define TRANSPORT (AUDIO_ENGINE->transport)
-#define TRANSPORT_DEFAULT_TOTAL_BARS 128
+#define TRANSPORT_DEFAULT_TOTAL_BARS 4096
 #define TRANSPORT_MAX_BPM 420.f
 #define TRANSPORT_MIN_BPM 40.f
 #define TRANSPORT_DEFAULT_BPM 140.f
