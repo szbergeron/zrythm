@@ -394,6 +394,15 @@ on_playhead_changed (
             arranger_widget_redraw_playhead (
               MW_AUDIO_ARRANGER);
         }
+      if (MW_CHORD_ARRANGER)
+        {
+          if (manually)
+            arranger_widget_redraw_whole (
+              MW_CHORD_ARRANGER);
+          else
+            arranger_widget_redraw_playhead (
+              MW_CHORD_ARRANGER);
+        }
     }
 }
 
@@ -994,8 +1003,10 @@ on_arranger_object_removed (
 }
 
 static void
-on_track_changed (Track * track)
+on_track_changed (
+  Track * track)
 {
+  g_return_if_fail (IS_TRACK_AND_NONNULL (track));
   if (GTK_IS_WIDGET (track->widget))
     {
       gtk_widget_set_visible (
@@ -1916,7 +1927,7 @@ return_to_pool:
                "Optimization needed.");
 
   /*g_usleep (8000);*/
-  /*project_sanity_check (PROJECT);*/
+  /*project_validate (PROJECT);*/
 
   return G_SOURCE_CONTINUE;
 }

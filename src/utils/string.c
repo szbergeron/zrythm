@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2018-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -19,11 +19,17 @@
 
 #include <string.h>
 
+#include "utils/objects.h"
 #include "utils/string.h"
 
 #include <gtk/gtk.h>
 
 #include <pcre.h>
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
+#include <regex.h>
 
 int
 string_is_ascii (const char * string)
@@ -234,6 +240,48 @@ string_remove_until_after_first_match (
   char * part = g_strdup (parts[1]);
   g_strfreev (parts);
   return part;
+}
+
+/**
+ * Replaces @ref str with @ref replace_str in
+ * all instances matched by @ref regex.
+ */
+void
+string_replace_regex (
+  char **      str,
+  const char * regex,
+  const char * replace_str)
+{
+  pcre2_code *re;
+  PCRE2_SIZE erroffset;
+  int errorcode;
+  re =
+    pcre2_compile (
+      (PCRE2_SPTR) regex, PCRE2_ZERO_TERMINATED, 0,
+      &errorcode, &erroffset, NULL);
+  if (!re)
+    {
+      PCRE2_UCHAR8 buffer[120];
+      pcre2_get_error_message (
+        errorcode, buffer, 120);
+
+      g_warning (
+        "failed to compile regex %s: %s",
+        regex, buffer);
+      return;
+    }
+
+  static PCRE2_UCHAR8 buf[10000];
+  size_t buf_sz = 10000;
+  pcre2_substitute (
+    re, (PCRE2_SPTR) *str, PCRE2_ZERO_TERMINATED,
+    0, PCRE2_SUBSTITUTE_GLOBAL, NULL, NULL,
+    (PCRE2_SPTR) replace_str, PCRE2_ZERO_TERMINATED,
+    buf, &buf_sz);
+  pcre2_code_free (re);
+
+  g_free (*str);
+  *str = g_strdup ((char *) buf);
 }
 
 char *

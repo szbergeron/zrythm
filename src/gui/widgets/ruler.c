@@ -619,6 +619,11 @@ get_clip_start_rect (
   RulerWidget *  self,
   GdkRectangle * rect)
 {
+  /* TODO these were added to fix unused
+   * warnings - check again if valid */
+  rect->x = 0;
+  rect->y = 0;
+
   if (self->type == TYPE (EDITOR))
     {
       ZRegion * region =
@@ -1948,13 +1953,13 @@ ruler_widget_refresh (RulerWidget * self)
   Position pos;
   position_from_seconds (&pos, 1.0);
   self->px_per_min =
-    60.0 * pos.total_ticks * self->px_per_tick;
+    60.0 * pos.ticks * self->px_per_tick;
   self->px_per_10sec =
-    10.0 * pos.total_ticks * self->px_per_tick;
+    10.0 * pos.ticks * self->px_per_tick;
   self->px_per_sec =
-    pos.total_ticks * self->px_per_tick;
+    pos.ticks * self->px_per_tick;
   self->px_per_100ms =
-    0.1 * pos.total_ticks * self->px_per_tick;
+    0.1 * pos.ticks * self->px_per_tick;
 
   position_set_to_bar (
     &pos, TRANSPORT->total_bars + 1);

@@ -151,14 +151,21 @@ void
 ui_show_message_full (
   GtkWindow *    parent_window,
   GtkMessageType type,
-  const char *   message)
+  const char *   format,
+  ...)
 {
+  va_list args;
+  va_start (args, format);
+
+  static char buf[40000];
+  vsprintf (buf, format, args);
+
   GtkDialogFlags flags =
     GTK_DIALOG_DESTROY_WITH_PARENT;
   GtkWidget * dialog =
     gtk_message_dialog_new (
       parent_window, flags, type,
-      GTK_BUTTONS_CLOSE, "%s", message);
+      GTK_BUTTONS_CLOSE, "%s", buf);
   gtk_window_set_title (
     GTK_WINDOW (dialog), PROGRAM_NAME);
   gtk_window_set_icon_name (
@@ -170,6 +177,8 @@ ui_show_message_full (
     }
   gtk_dialog_run (GTK_DIALOG (dialog));
   gtk_widget_destroy (dialog);
+
+  va_end (args);
 }
 
 /**
@@ -244,23 +253,8 @@ px_to_pos (
         px = 0.0;
     }
 
-  pos->bars =
-    (int)
-    floor (px / ruler->px_per_bar + 1.0);
-  px = fmod (px, ruler->px_per_bar);
-  pos->beats =
-    (int)
-    floor (px / ruler->px_per_beat + 1.0);
-  px = fmod (px, ruler->px_per_beat);
-  pos->sixteenths =
-    (int)
-    floor (px / ruler->px_per_sixteenth + 1.0);
-  px = fmod (px, ruler->px_per_sixteenth);
-  double ticks = px / ruler->px_per_tick;
-  pos->ticks = (int) floor (ticks);
-  pos->sub_tick = floor (ticks) - pos->ticks;
-  pos->total_ticks = position_to_ticks (pos);
-  pos->frames = position_to_frames (pos);
+  pos->ticks = px / ruler->px_per_tick;
+  position_update_frames_from_ticks (pos);
 }
 
 /**
@@ -311,7 +305,7 @@ pos_to_px (
 {
   int px =
     (int)
-    (pos->total_ticks * ruler->px_per_tick);
+    (pos->ticks * ruler->px_per_tick);
 
   if (use_padding)
     px += SPACE_BEFORE_START;

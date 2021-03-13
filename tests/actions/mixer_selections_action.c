@@ -329,7 +329,7 @@ _test_create_plugins (
     tracklist_selections_action_new_copy (
       TRACKLIST_SELECTIONS, TRACKLIST->num_tracks);
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   undo_manager_perform (UNDO_MANAGER, ua);
 
   int dest_track_pos = TRACKLIST->num_tracks - 1;
@@ -337,9 +337,9 @@ _test_create_plugins (
     TRACKLIST->tracks[dest_track_pos];
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   g_assert_true (
-    track_verify_identifiers (dest_track));
+    track_validate (dest_track));
 
   undo_manager_undo (UNDO_MANAGER);
   undo_manager_undo (UNDO_MANAGER);
@@ -486,7 +486,7 @@ _test_port_and_plugin_track_pos_after_move (
       TRACKLIST_SELECTIONS, TRACKLIST->num_tracks);
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
 
   undo_manager_perform (UNDO_MANAGER, ua);
 
@@ -494,9 +494,9 @@ _test_port_and_plugin_track_pos_after_move (
     TRACKLIST->tracks[dest_track_pos];
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   g_assert_true (
-    track_verify_identifiers (dest_track));
+    track_validate (dest_track));
 
   /* move plugin from 1st track to 2nd track and
    * undo/redo */
@@ -516,23 +516,23 @@ _test_port_and_plugin_track_pos_after_move (
   g_usleep (1000000);
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   g_assert_true (
-    track_verify_identifiers (dest_track));
+    track_validate (dest_track));
 
   undo_manager_undo (UNDO_MANAGER);
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   g_assert_true (
-    track_verify_identifiers (dest_track));
+    track_validate (dest_track));
 
   undo_manager_redo (UNDO_MANAGER);
 
   g_assert_true (
-    track_verify_identifiers (src_track));
+    track_validate (src_track));
   g_assert_true (
-    track_verify_identifiers (dest_track));
+    track_validate (dest_track));
 
   undo_manager_undo (UNDO_MANAGER);
 
@@ -644,7 +644,7 @@ test_move_two_plugins_one_slot_up (void)
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* get an automation track */
   AutomationTracklist * atl =
@@ -678,7 +678,7 @@ test_move_two_plugins_one_slot_up (void)
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
   atl = track_get_automation_tracklist (track);
   at = atl->ats[atl->num_ats - 1];
 
@@ -709,7 +709,7 @@ test_move_two_plugins_one_slot_up (void)
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* duplicate the plugin to the 2nd slot */
   mixer_selections_clear (
@@ -745,7 +745,7 @@ test_move_two_plugins_one_slot_up (void)
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* move the 2 plugins to start at slot#1 (2nd
    * slot) */
@@ -763,18 +763,18 @@ test_move_two_plugins_one_slot_up (void)
       track->pos, 1);
   undo_manager_perform (UNDO_MANAGER, ua);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_undo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_redo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
 
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* move the 2 plugins to start at slot 2 (3rd
    * slot) */
@@ -792,18 +792,18 @@ test_move_two_plugins_one_slot_up (void)
       track->pos, 2);
   undo_manager_perform (UNDO_MANAGER, ua);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_undo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_redo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
 
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* move the 2 plugins to start at slot 1 (2nd
    * slot) */
@@ -821,18 +821,18 @@ test_move_two_plugins_one_slot_up (void)
       track->pos, 1);
   undo_manager_perform (UNDO_MANAGER, ua);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_undo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   undo_manager_redo (UNDO_MANAGER);
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
 
   /* save and reload the project */
   test_project_save_and_reload ();
   track = TRACKLIST->tracks[track_pos];
-  g_assert_true (track_verify_identifiers (track));
+  g_assert_true (track_validate (track));
 
   /* move the 2 plugins to start back at slot 0 (1st
    * slot) */
@@ -853,7 +853,7 @@ test_move_two_plugins_one_slot_up (void)
   undo_manager_redo (UNDO_MANAGER);
 
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
   g_assert_true (
     IS_PLUGIN (track->channel->inserts[0]));
   g_assert_true (
@@ -979,7 +979,7 @@ test_move_two_plugins_one_slot_up (void)
 #endif
 
   g_assert_true (
-    track_verify_identifiers (track));
+    track_validate (track));
 
   /* let the engine run */
   g_usleep (1000000);
@@ -1004,6 +1004,7 @@ test_create_modulator (void)
   test_helper_zrythm_init ();
 
 #ifdef HAVE_AMS_LFO
+#ifdef HAVE_CARLA
   /* create a track with an insert */
   PluginSetting * setting =
     test_plugin_manager_get_plugin_setting (
@@ -1035,9 +1036,14 @@ test_create_modulator (void)
   Plugin * p2 =
     P_MODULATOR_TRACK->modulators[
       P_MODULATOR_TRACK->num_modulators - 1];
-  Port * cv_out =
-    plugin_get_port_by_symbol (
-      p1, "outSine");
+  Port * cv_out = NULL;
+  for (int i = 0; i < p1->num_out_ports; i++)
+    {
+      Port * p = p1->out_ports[i];
+      if (p->id.type != TYPE_CV)
+        continue;
+      cv_out = p;
+    }
   Port * ctrl_in =
     plugin_get_port_by_symbol (
       p2, "freq");
@@ -1072,7 +1078,8 @@ test_create_modulator (void)
   mixer_selections_free (sel);
 
   plugin_setting_free (setting);
-#endif
+#endif /* HAVE_CARLA */
+#endif /* HAVE_AMS_LFO */
 
   test_helper_zrythm_cleanup ();
 }

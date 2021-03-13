@@ -1562,7 +1562,7 @@ arranger_widget_on_key_action (
             {
               Position tmp;
               position_set_to_bar (&tmp, 2);
-              move_ticks = tmp.total_ticks;
+              move_ticks = tmp.ticks;
             }
           else
             {
@@ -1586,7 +1586,7 @@ arranger_widget_on_key_action (
                 arranger_selections_get_first_object (
                   sel);
 
-              if (obj->pos.total_ticks - move_ticks >= min_possible_pos.total_ticks)
+              if (obj->pos.ticks - move_ticks >= min_possible_pos.ticks)
                 {
                   UndoableAction * action =
                     arranger_selections_action_new_move (
@@ -2434,10 +2434,10 @@ on_drag_begin_handle_hit_object (
 
 static void
 drag_begin (
-  GtkGestureDrag *   gesture,
-  gdouble            start_x,
-  gdouble            start_y,
-  ArrangerWidget *   self)
+  GtkGestureDrag * gesture,
+  gdouble          start_x,
+  gdouble          start_y,
+  ArrangerWidget * self)
 {
   g_debug ("arranger drag begin starting...");
 
@@ -2445,6 +2445,7 @@ drag_begin (
   arranger_widget_px_to_pos (
     self, start_x, &self->start_pos, 1);
   self->start_y = start_y;
+  self->drag_update_started = false;
 
   /* set last project selection type */
   if (self->type == ARRANGER_WIDGET_TYPE_TIMELINE)
@@ -2907,6 +2908,18 @@ drag_update (
   gdouble         offset_y,
   ArrangerWidget * self)
 {
+  if (!self->drag_update_started &&
+      !gtk_drag_check_threshold (
+        GTK_WIDGET (self),
+        (int) self->start_x, (int) self->start_y,
+        (int) (self->start_x + offset_x),
+        (int) (self->start_y + offset_y)))
+    {
+      return;
+    }
+
+  self->drag_update_started = true;
+
   /* state mask needs to be updated */
   GdkModifierType state_mask =
     ui_get_state_mask (
@@ -3363,8 +3376,8 @@ on_drag_end_automation (
         ArrangerObject * obj =
           (ArrangerObject *) ap;
         double ticks_diff =
-          obj->pos.total_ticks -
-          start_obj->pos.total_ticks;
+          obj->pos.ticks -
+          start_obj->pos.ticks;
         double norm_value_diff =
           (double)
           (ap->normalized_val -
@@ -3384,8 +3397,8 @@ on_drag_end_automation (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         float value_diff =
           ((AutomationPoint *) obj)->normalized_val -
           ((AutomationPoint *) obj->transient)->
@@ -3549,8 +3562,8 @@ on_drag_end_midi (
       ArrangerObject * obj =
         (ArrangerObject *) self->start_object;
       double ticks_diff =
-        obj->pos.total_ticks -
-        obj->transient->pos.total_ticks;
+        obj->pos.ticks -
+        obj->transient->pos.ticks;
       UndoableAction * ua =
         arranger_selections_action_new_resize (
           (ArrangerSelections *) MA_SELECTIONS,
@@ -3565,8 +3578,8 @@ on_drag_end_midi (
       ArrangerObject * obj =
         (ArrangerObject *) self->start_object;
       double ticks_diff =
-        obj->end_pos.total_ticks -
-        obj->transient->end_pos.total_ticks;
+        obj->end_pos.ticks -
+        obj->transient->end_pos.ticks;
       UndoableAction * ua =
         arranger_selections_action_new_resize (
           (ArrangerSelections *) MA_SELECTIONS,
@@ -3599,8 +3612,8 @@ on_drag_end_midi (
       ArrangerObject * obj =
         (ArrangerObject *) self->start_object;
       double ticks_diff =
-        obj->pos.total_ticks -
-        obj->transient->pos.total_ticks;
+        obj->pos.ticks -
+        obj->transient->pos.ticks;
       int pitch_diff =
         ((MidiNote *) obj)->val -
         ((MidiNote *) obj->transient)->val;
@@ -3618,8 +3631,8 @@ on_drag_end_midi (
       ArrangerObject * obj =
         (ArrangerObject *) self->start_object;
       double ticks_diff =
-        obj->pos.total_ticks -
-        obj->transient->pos.total_ticks;
+        obj->pos.ticks -
+        obj->transient->pos.ticks;
       int pitch_diff =
         ((MidiNote *) obj)->val -
         ((MidiNote *) obj->transient)->val;
@@ -3707,8 +3720,8 @@ on_drag_end_chord (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         UndoableAction * ua =
           (UndoableAction *)
           arranger_selections_action_new_move_chord (
@@ -3724,8 +3737,8 @@ on_drag_end_chord (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         UndoableAction * ua =
           (UndoableAction *)
           arranger_selections_action_new_duplicate_chord (
@@ -3822,8 +3835,8 @@ on_drag_end_timeline (
           ArrangerObject * obj =
             (ArrangerObject *) self->start_object;
           double ticks_diff =
-            obj->pos.total_ticks -
-            obj->transient->pos.total_ticks;
+            obj->pos.ticks -
+            obj->transient->pos.ticks;
           UndoableAction * ua =
             arranger_selections_action_new_resize (
               (ArrangerSelections *) TL_SELECTIONS,
@@ -3838,8 +3851,8 @@ on_drag_end_timeline (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         UndoableAction * ua =
           arranger_selections_action_new_resize (
             (ArrangerSelections *) TL_SELECTIONS,
@@ -3854,8 +3867,8 @@ on_drag_end_timeline (
           ArrangerObject * obj =
             (ArrangerObject *) self->start_object;
           double ticks_diff =
-            obj->pos.total_ticks -
-            obj->transient->pos.total_ticks;
+            obj->pos.ticks -
+            obj->transient->pos.ticks;
           UndoableAction * ua =
             arranger_selections_action_new_resize (
               (ArrangerSelections *) TL_SELECTIONS,
@@ -3870,8 +3883,8 @@ on_drag_end_timeline (
           ArrangerObject * obj =
             (ArrangerObject *) self->start_object;
           double ticks_diff =
-            obj->fade_in_pos.total_ticks -
-            obj->transient->fade_in_pos.total_ticks;
+            obj->fade_in_pos.ticks -
+            obj->transient->fade_in_pos.ticks;
           UndoableAction * ua =
             arranger_selections_action_new_resize (
               (ArrangerSelections *) TL_SELECTIONS,
@@ -3887,8 +3900,8 @@ on_drag_end_timeline (
           ArrangerObject * obj =
             (ArrangerObject *) self->start_object;
           double ticks_diff =
-            obj->end_pos.total_ticks -
-            obj->transient->end_pos.total_ticks;
+            obj->end_pos.ticks -
+            obj->transient->end_pos.ticks;
           UndoableAction * ua =
             arranger_selections_action_new_resize (
               (ArrangerSelections *) TL_SELECTIONS,
@@ -3903,8 +3916,8 @@ on_drag_end_timeline (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->end_pos.total_ticks -
-          obj->transient->end_pos.total_ticks;
+          obj->end_pos.ticks -
+          obj->transient->end_pos.ticks;
         /* stretch now */
         transport_stretch_audio_regions (
           TRANSPORT, TL_SELECTIONS, false, 0.0);
@@ -3922,8 +3935,8 @@ on_drag_end_timeline (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->end_pos.total_ticks -
-          obj->transient->end_pos.total_ticks;
+          obj->end_pos.ticks -
+          obj->transient->end_pos.ticks;
         UndoableAction * ua =
           arranger_selections_action_new_resize (
             (ArrangerSelections *) TL_SELECTIONS,
@@ -3938,8 +3951,8 @@ on_drag_end_timeline (
           ArrangerObject * obj =
             (ArrangerObject *) self->start_object;
           double ticks_diff =
-            obj->fade_out_pos.total_ticks -
-            obj->transient->fade_out_pos.total_ticks;
+            obj->fade_out_pos.ticks -
+            obj->transient->fade_out_pos.ticks;
           UndoableAction * ua =
             arranger_selections_action_new_resize (
               (ArrangerSelections *) TL_SELECTIONS,
@@ -3976,8 +3989,8 @@ on_drag_end_timeline (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         UndoableAction * ua =
           arranger_selections_action_new_move_timeline (
             TL_SELECTIONS, ticks_diff,
@@ -3993,8 +4006,8 @@ on_drag_end_timeline (
         ArrangerObject * obj =
           (ArrangerObject *) self->start_object;
         double ticks_diff =
-          obj->pos.total_ticks -
-          obj->transient->pos.total_ticks;
+          obj->pos.ticks -
+          obj->transient->pos.ticks;
         UndoableAction * ua = NULL;
         if (ACTION_IS (MOVING_COPY))
           {
@@ -4216,6 +4229,7 @@ drag_end (
   self->start_y = 0;
   self->last_offset_x = 0;
   self->last_offset_y = 0;
+  self->drag_update_started = false;
   self->last_adj_ticks_diff = 0;
   self->start_object = NULL;
   self->hovered_object = NULL;

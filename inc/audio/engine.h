@@ -129,7 +129,8 @@ typedef struct MPMCQueue MPMCQueue;
       _ev->type = et; \
       _ev->arg = (void *) _arg; \
       _ev->uint_arg = _uint_arg; \
-      _ev->backtrace = backtrace_get ("", 40); \
+      _ev->backtrace = \
+        backtrace_get ("", 40, false); \
       g_debug ( \
         "pushing engine event " #et \
         " (%s:%d)", __func__, __LINE__); \
@@ -879,6 +880,15 @@ engine_update_frames_per_tick (
   const int           beats_per_bar,
   const float         bpm,
   const sample_rate_t sample_rate);
+
+/**
+ * GSourceFunc to be added using idle add.
+ *
+ * This will loop indefinintely.
+ */
+int
+engine_process_events (
+  AudioEngine * self);
 
 /**
  * To be called by each implementation to prepare the

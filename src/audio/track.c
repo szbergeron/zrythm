@@ -171,17 +171,23 @@ track_init_loaded (
 /**
  * Adds a new TrackLane to the Track.
  */
+NONNULL
 static void
 track_add_lane (
   Track * self,
   int     fire_events)
 {
-  g_return_if_fail (self);
+  g_return_if_fail (IS_TRACK (self));
+
   array_double_size_if_full (
     self->lanes, self->num_lanes,
     self->lanes_size, TrackLane *);
-  self->lanes[self->num_lanes++] =
+  TrackLane * lane =
     track_lane_new (self, self->num_lanes);
+  g_return_if_fail (lane);
+  self->lanes[self->num_lanes] = lane;
+
+  self->num_lanes++;
 
   if (fire_events)
     {
@@ -369,6 +375,22 @@ track_type_has_channel (
 }
 
 /**
+ * Returns whether the track type is deletable
+ * by the user.
+ */
+bool
+track_type_is_deletable (
+  TrackType type)
+{
+  return
+    type != TRACK_TYPE_MASTER &&
+    type != TRACK_TYPE_TEMPO &&
+    type != TRACK_TYPE_CHORD &&
+    type != TRACK_TYPE_MODULATOR &&
+    type != TRACK_TYPE_MARKER;
+}
+
+/**
  * Clones the track and returns the clone.
  *
  * @bool src_is_project Whether \ref track is a
@@ -460,7 +482,7 @@ track_clone (
    * during unit tests */
   if (ZRYTHM_TESTING && src_is_project)
     {
-      track_verify_identifiers (track);
+      track_validate (track);
     }
 
   return new_track;
@@ -505,7 +527,8 @@ track_select (
       if (exclusive)
         {
           tracklist_selections_select_single (
-            TRACKLIST_SELECTIONS, self);
+            TRACKLIST_SELECTIONS, self,
+            fire_events);
         }
       else
         {
@@ -784,7 +807,7 @@ track_get_velocities_in_range (
  * @return True if pass.
  */
 bool
-track_verify_identifiers (
+track_validate (
   Track * self)
 {
   g_return_val_if_fail (self, false);
@@ -874,7 +897,7 @@ track_verify_identifiers (
       if (ch->instrument)
         {
           g_return_val_if_fail (
-            plugin_verify_identifiers (
+            plugin_validate (
               ch->instrument), false);
         }
     }
@@ -883,9 +906,22 @@ track_verify_identifiers (
   if (atl)
     {
       g_return_val_if_fail (
-        automation_tracklist_verify_identifiers (
+        automation_tracklist_validate (
           atl),
         false);
+    }
+
+  /* verify regions */
+  for (int i = 0; i < self->num_lanes; i++)
+    {
+      TrackLane * lane = self->lanes[i];
+
+      for (int j = 0; j < lane->num_regions; j++)
+        {
+          ZRegion * region = lane->regions[j];
+          region_validate (
+            region, self->is_project);
+        }
     }
 
   g_message ("done");
@@ -1325,7 +1361,9 @@ track_insert_region (
     {
       track = automation_track_get_track (at);
     }
-  g_return_if_fail (IS_TRACK (track));
+  g_return_if_fail (
+    IS_TRACK (track) &&
+    region_validate (region, false));
 
   if (gen_name)
     {
@@ -2701,7 +2739,7 @@ track_activate_all_plugins (
           track->channel->inserts[
             i - (STRIP_SIZE + 1)];
 
-      if (pl)
+      if (pl && pl->instantiated)
         {
           plugin_activate (pl, activate);
         }

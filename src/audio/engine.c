@@ -160,6 +160,11 @@ engine_update_frames_per_tick (
       return;
     }
 
+  g_return_if_fail (
+    beats_per_bar > 0 && bpm > 0 &&
+    sample_rate > 0 &&
+    self->transport->ticks_per_bar > 0);
+
   self->frames_per_tick =
     (((double) sample_rate * 60.0 *
        (double) beats_per_bar) /
@@ -226,10 +231,14 @@ clean_duplicates_and_copy (
  *
  * This will loop indefinintely.
  */
-static int
+int
 engine_process_events (
   AudioEngine * self)
 {
+  g_return_val_if_fail (
+    g_thread_self () == zrythm_app->gtk_thread,
+    G_SOURCE_REMOVE);
+
   self->last_events_process_started =
     g_get_monotonic_time ();
 
@@ -244,7 +253,7 @@ engine_process_events (
   /*g_debug ("%d EVENTS, waiting for pause", num_events);*/
 
   EngineState state;
-  if (num_events > 0)
+  if (self->activated && num_events > 0)
     {
       /* pause engine */
       engine_wait_for_pause (self, &state, F_FORCE);
@@ -315,9 +324,9 @@ engine_process_events (
                "Optimization needed.");
 
   /*g_usleep (8000);*/
-  /*project_sanity_check (PROJECT);*/
+  /*project_validate (PROJECT);*/
 
-  if (num_events > 0)
+  if (self->activated && num_events > 0)
     {
       /* continue engine */
       engine_resume (self, &state);
@@ -839,6 +848,7 @@ engine_new (
       project->audio_engine = self;
     }
 
+  self->sample_rate = 44000;
   self->transport = transport_new (self);
   self->pool = audio_pool_new ();
   self->control_room = control_room_new ();
@@ -1068,7 +1078,7 @@ engine_activate (
 
   self->activated = activate;
 
-  if (ZRYTHM_HAVE_UI)
+  if (ZRYTHM_HAVE_UI && PROJECT->loaded)
     {
       EVENTS_PUSH (
         ET_ENGINE_ACTIVATE_CHANGED, NULL);

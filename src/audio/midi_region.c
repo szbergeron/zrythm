@@ -116,7 +116,7 @@ midi_region_new_from_chord_descr (
   Position r_end_pos;
   position_from_ticks (
     &r_end_pos,
-    pos->total_ticks + (double) r_length_ticks);
+    pos->ticks + (double) r_length_ticks);
 
   /* create region */
   ZRegion * r =
@@ -257,9 +257,9 @@ midi_region_get_first_midi_note (
     if (
       !result  ||
       ((ArrangerObject *) result)->
-        end_pos.total_ticks >
+        end_pos.ticks >
       ((ArrangerObject *) region->midi_notes[i])->
-        end_pos.total_ticks)
+        end_pos.ticks)
     {
       result = region->midi_notes[i];
     }
@@ -281,9 +281,9 @@ midi_region_get_last_midi_note (
     if (
       !result ||
       ((ArrangerObject *) result)->
-        end_pos.total_ticks <
+        end_pos.ticks <
       ((ArrangerObject *) region->midi_notes[i])->
-        end_pos.total_ticks)
+        end_pos.ticks)
     {
       result = region->midi_notes[i];
     }
@@ -425,7 +425,7 @@ midi_region_new_from_midi_file (
 
   Position end_pos;
   position_from_ticks (
-    &end_pos, start_pos->total_ticks + 1);
+    &end_pos, start_pos->ticks + 1);
   region_init (
     self, start_pos, &end_pos, track_pos,
     lane_pos, idx_inside_lane);
@@ -463,15 +463,16 @@ midi_region_new_from_midi_file (
           position_from_ticks (&pos, ticks);
           position_from_ticks (
             &global_pos,
-            r_obj->pos.total_ticks + ticks);
+            r_obj->pos.ticks + ticks);
           g_debug (
             "dwAbsPos: %d ", msg.dwAbsPos);
 
+          int bars = position_get_bars (&pos, true);
           if (ZRYTHM_HAVE_UI &&
-              pos.bars > TRANSPORT->total_bars -8)
+              bars > TRANSPORT->total_bars -8)
             {
               transport_update_total_bars (
-                TRANSPORT, pos.bars + 8,
+                TRANSPORT, bars + 8,
                 F_PUBLISH_EVENTS);
             }
 
@@ -988,7 +989,7 @@ midi_region_get_as_events (
 
   double region_start = 0;
   if (add_region_start)
-    region_start = self_obj->pos.total_ticks;
+    region_start = self_obj->pos.ticks;
 
   MidiNote * mn;
   for (int i = 0; i < self->num_midi_notes; i++)
@@ -1027,6 +1028,8 @@ send_notes_off_at (
   MidiEvents *       midi_events,
   midi_time_t        time)
 {
+  /*g_debug ("sending notes off at %u", time);*/
+
   midi_byte_t channel = 1;
   if (self->id.type == REGION_TYPE_MIDI)
     {
@@ -1094,6 +1097,19 @@ midi_region_fill_midi_events (
     region_timeline_frames_to_local (
       self, g_start_frames, F_NORMALIZE);
 
+#if 0
+  if (g_start_frames == 0)
+    {
+      g_debug (
+        "fill midi events - g start %ld - "
+        "local start %"PRIu32" - nframes %"PRIu32" - "
+        "notes off at end %u - "
+        "r local pos %ld",
+        g_start_frames, local_start_frame, nframes,
+        note_off_at_end, r_local_pos);
+    }
+#endif
+
   /* go through each note */
   int num_objs =
     track->type == TRACK_TYPE_CHORD ?
@@ -1129,24 +1145,25 @@ midi_region_fill_midi_events (
           mn_obj->pos.frames <
             r_local_pos + (long) nframes)
         {
-          midi_time_t time =
+          midi_time_t _time =
             (midi_time_t)
             (local_start_frame +
               (mn_obj->pos.frames - r_local_pos));
           /*g_message ("normal note on at %u", time);*/
+
           if (mn)
             {
               midi_events_add_note_on (
                 midi_events,
                 midi_region_get_midi_ch (self),
                 mn->val, mn->vel->vel,
-                time, F_QUEUED);
+                _time, F_QUEUED);
             }
           else if (co)
             {
               midi_events_add_note_ons_from_chord_descr (
                 midi_events, descr, 1,
-                VELOCITY_DEFAULT, time,
+                VELOCITY_DEFAULT, _time,
                 F_QUEUED);
             }
         }
@@ -1165,7 +1182,7 @@ midi_region_fill_midi_events (
           (mn_obj_end_frames <=
             (r_local_pos + nframes)))
         {
-          midi_time_t time =
+          midi_time_t _time =
             (midi_time_t)
             (local_start_frame +
               (mn_obj_end_frames - r_local_pos));
@@ -1173,17 +1190,27 @@ midi_region_fill_midi_events (
           /* note actually ends 1 frame before
            * the end point, not at the end
            * point */
-          if (time > 0)
+          if (_time > 0)
             {
-              time--;
+              _time--;
             }
+
+#if 0
+          if (g_start_frames == 0)
+            {
+              g_debug (
+                "note ends within cycle (end "
+                "frames %ld - note off time: %u",
+                mn_obj_end_frames, _time);
+            }
+#endif
 
           if (mn)
             {
               midi_events_add_note_off (
                 midi_events,
                 midi_region_get_midi_ch (self),
-                mn->val, time, F_QUEUED);
+                mn->val, _time, F_QUEUED);
             }
           else if (co)
             {
@@ -1195,7 +1222,7 @@ midi_region_fill_midi_events (
                     {
                       midi_events_add_note_off (
                         midi_events, 1, l + 36,
-                        time, F_QUEUED);
+                        _time, F_QUEUED);
                     }
                 }
             }

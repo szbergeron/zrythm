@@ -7,7 +7,7 @@ The project uses [meson](https://mesonbuild.com), so
 the steps to configure and build are
 
     meson build
-    ninja -C build
+    meson compile -C build
 
 To pass options, use the following syntax
 
@@ -48,8 +48,10 @@ with meaningful stack traces and bug reports.
 - gtksourceview (LGPLv2.1+): <https://wiki.gnome.org/Projects/GtkSourceView>
 - guile (GPLv3+): <https://www.gnu.org/software/guile/>
 - libaudec (AGPLv3+): <https://git.zrythm.org/cgit/libaudec/>
+- libbacktrace (3-Clause BSD): <https://github.com/ianlancetaylor/libbacktrace>
 - libcyaml (ISC): <https://github.com/tlsa/libcyaml/>
 - lilv (ISC): <https://drobilla.net/software/lilv>
+- pcre2 (3-Clause BSD): <https://www.pcre.org/>
 - reproc (Expat): <https://github.com/DaanDeMeyer/reproc>
 - zstd (3-Clause BSD): <https://github.com/facebook/zstd>
 
@@ -71,7 +73,7 @@ Once the program is built, it will need to be
 installed the first time before it can run (to
 install the [GSettings](https://developer.gnome.org/gio/stable/GSettings.html) among other things).
 
-    ninja -C build install
+    meson install -C build
 
 If you don't want to install anything permanent on
 your system, you can install it somewhere

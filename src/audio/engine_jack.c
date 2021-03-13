@@ -21,6 +21,8 @@
 
 #ifdef HAVE_JACK
 
+#include <math.h>
+
 #include "audio/channel.h"
 #include "audio/engine.h"
 #include "audio/engine_jack.h"
@@ -187,28 +189,29 @@ sample_rate_cb (
     &AUDIO_ENGINE->changing_sample_rate, 1);
 #endif
 
+  ENGINE_EVENTS_PUSH (
+    AUDIO_ENGINE_EVENT_SAMPLE_RATE_CHANGE,
+    NULL, nframes);
+
   /* if engine not activated then handle
    * immediately, otherwise push to queue */
-  if (self->activated)
+  if (g_thread_self () == zrythm_app->gtk_thread)
     {
-      ENGINE_EVENTS_PUSH (
-        AUDIO_ENGINE_EVENT_SAMPLE_RATE_CHANGE,
-        NULL, nframes);
-
-      /* wait for gtk thread to process all events */
-      gint64 cur_time = g_get_monotonic_time ();
-      while (
-        cur_time > AUDIO_ENGINE->last_events_process_started ||
-        cur_time > AUDIO_ENGINE->last_events_processed)
-        {
-          g_message ("-------- waiting sample rate change");
-          g_usleep (1000);
-        }
+      engine_process_events (self);
     }
   else
     {
-      engine_jack_handle_sample_rate_change (
-        self, nframes);
+      /* wait for gtk thread to process all events */
+      gint64 cur_time = g_get_monotonic_time ();
+      while (
+        cur_time >
+          self->last_events_process_started ||
+        cur_time > self->last_events_processed)
+        {
+          g_message (
+            "-------- waiting sample rate change");
+          g_usleep (1000);
+        }
     }
 
 #if 0
@@ -423,18 +426,19 @@ timebase_cb (
   pos->frame = (jack_nframes_t) PLAYHEAD->frames;
 
   /* BBT */
-  pos->bar = PLAYHEAD->bars;
-  pos->beat = PLAYHEAD->beats;
+  pos->bar = position_get_bars (PLAYHEAD, true);
+  pos->beat = position_get_beats (PLAYHEAD, true);
   pos->tick =
-    PLAYHEAD->sixteenths * TICKS_PER_SIXTEENTH_NOTE +
-    PLAYHEAD->ticks;
+    position_get_sixteenths (PLAYHEAD, true) *
+    TICKS_PER_SIXTEENTH_NOTE +
+    (int) floor (position_get_ticks (PLAYHEAD));
   Position bar_start;
   position_set_to_bar (
-    &bar_start, PLAYHEAD->bars);
+    &bar_start, position_get_bars (PLAYHEAD, true));
   pos->bar_start_tick =
     (double)
-    (PLAYHEAD->total_ticks -
-     bar_start.total_ticks);
+    (PLAYHEAD->ticks -
+     bar_start.ticks);
   pos->beats_per_bar =
     (float) TRANSPORT->time_sig.beats_per_bar;
   pos->beat_type =

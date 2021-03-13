@@ -160,6 +160,7 @@ if get_option ('tests')
     'audio/marker_track': { parallel: true },
     'audio/metronome': { parallel: true },
     'audio/midi': { parallel: true },
+    'audio/midi_event': { parallel: true },
     'audio/midi_mapping': { parallel: true },
     'audio/midi_note': { parallel: true },
     'audio/midi_region': { parallel: true },
@@ -184,6 +185,8 @@ if get_option ('tests')
     'utils/io': { parallel: true },
     'utils/string': { parallel: true },
     'utils/ui': { parallel: true },
+    'utils/yaml': { parallel: true },
+    'zrythm_app': { parallel: true },
     'zrythm': { parallel: true },
     }
 
@@ -192,7 +195,7 @@ if get_option ('tests')
       'actions/mixer_selections_action': {
         parallel: false },
       'actions/port_connection': {
-        parallel: true },
+        parallel: false },
       'actions/tracklist_selections': {
         parallel: false },
       'actions/tracklist_selections_edit': {

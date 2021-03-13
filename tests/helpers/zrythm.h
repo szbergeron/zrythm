@@ -70,18 +70,8 @@ test_helper_zrythm_gui_init (
 
 /** Compares 2 Position pointers. */
 #define g_assert_cmppos(a,b) \
-  g_assert_cmpint ( \
-    (a)->bars, ==, (b)->bars); \
-  g_assert_cmpint ( \
-    (a)->beats, ==, (b)->beats); \
-  g_assert_cmpint ( \
-    (a)->sixteenths, ==, (b)->sixteenths); \
-  g_assert_cmpint ( \
-    (a)->ticks, ==, (b)->ticks); \
   g_assert_cmpfloat_with_epsilon ( \
-    (a)->sub_tick, (b)->sub_tick, 0.0001); \
-  g_assert_cmpfloat_with_epsilon ( \
-    (a)->total_ticks, (b)->total_ticks, 0.0001); \
+    (a)->ticks, (b)->ticks, 0.0001); \
   g_assert_cmpint ( \
     (a)->frames, ==, (b)->frames)
 
@@ -126,7 +116,7 @@ segv_handler (int sig)
     prefix,
     _("Error: %s - Backtrace:\n"), strsignal (sig));
 #endif
-  char * bt = backtrace_get (prefix, 100);
+  char * bt = backtrace_get (prefix, 100, false);
 
   g_warning ("%s", bt);
 

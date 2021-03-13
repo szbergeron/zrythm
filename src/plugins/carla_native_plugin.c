@@ -21,6 +21,7 @@
 
 #ifdef HAVE_CARLA
 
+#include <math.h>
 #include <stdlib.h>
 
 #include "audio/engine.h"
@@ -604,20 +605,20 @@ carla_native_plugin_process (
   self->time_info.frame =
     (uint64_t) g_start_frames;
   self->time_info.bbt.bar =
-    PLAYHEAD->bars;
+    position_get_bars (PLAYHEAD, true);
   self->time_info.bbt.beat =
-    PLAYHEAD->beats;
+    position_get_beats (PLAYHEAD, true);
   self->time_info.bbt.tick =
-    PLAYHEAD->sixteenths *
+    position_get_sixteenths (PLAYHEAD, true) *
       TICKS_PER_SIXTEENTH_NOTE +
-    PLAYHEAD->ticks;
+    (int) floor (position_get_ticks (PLAYHEAD));
   Position bar_start;
   position_set_to_bar (
-    &bar_start, PLAYHEAD->bars);
+    &bar_start,
+    position_get_bars (PLAYHEAD, true));
   self->time_info.bbt.barStartTick =
     (double)
-    (PLAYHEAD->total_ticks -
-     bar_start.total_ticks);
+    (PLAYHEAD->ticks - bar_start.ticks);
   self->time_info.bbt.beatsPerBar =
     (float) TRANSPORT_BEATS_PER_BAR;
   self->time_info.bbt.beatType =
@@ -714,7 +715,9 @@ carla_native_plugin_process (
            i < self->plugin->num_in_ports; i++)
         {
           port = self->plugin->in_ports[i];
-          if (port->id.type == TYPE_EVENT)
+          if (port->id.type == TYPE_EVENT &&
+              port->id.flags2 &
+                PORT_FLAG2_SUPPORTS_MIDI)
             {
               break;
             }
@@ -1067,6 +1070,8 @@ create_ports (
           Port * port =
             port_new_with_type (
               TYPE_EVENT, FLOW_INPUT, name);
+          port->id.flags2 |=
+            PORT_FLAG2_SUPPORTS_MIDI;
           plugin_add_in_port (
             self->plugin, port);
         }
@@ -1077,6 +1082,28 @@ create_ports (
           Port * port =
             port_new_with_type (
               TYPE_EVENT, FLOW_OUTPUT, name);
+          port->id.flags2 |=
+            PORT_FLAG2_SUPPORTS_MIDI;
+          plugin_add_out_port (
+            self->plugin, port);
+        }
+      for (int i = 0; i < descr->num_cv_ins; i++)
+        {
+          strcpy (tmp, _("CV in"));
+          sprintf (name, "%s %d", tmp, i);
+          Port * port =
+            port_new_with_type (
+              TYPE_CV, FLOW_INPUT, name);
+          plugin_add_in_port (
+            self->plugin, port);
+        }
+      for (int i = 0; i < descr->num_cv_outs; i++)
+        {
+          strcpy (tmp, _("CV out"));
+          sprintf (name, "%s %d", tmp, i);
+          Port * port =
+            port_new_with_type (
+              TYPE_CV, FLOW_OUTPUT, name);
           plugin_add_out_port (
             self->plugin, port);
         }
@@ -1455,7 +1482,9 @@ carla_native_plugin_get_midi_out_port (
   for (int i = 0; i < pl->num_in_ports; i++)
     {
       port = pl->out_ports[i];
-      if (port->id.type == TYPE_EVENT)
+      if (port->id.type == TYPE_EVENT &&
+          port->id.flags2 &
+            PORT_FLAG2_SUPPORTS_MIDI)
         return port;
     }
 
@@ -1506,6 +1535,15 @@ carla_native_plugin_save_state (
   CarlaNativePlugin * self,
   bool                is_backup)
 {
+  if (!self->plugin->instantiated)
+    {
+      g_debug (
+        "plugin %s not instantiated, skipping %s",
+        self->plugin->setting->descr->name,
+        __func__);
+      return 0;
+    }
+
   char * abs_state_dir =
     plugin_get_abs_state_dir (
       self->plugin, is_backup);

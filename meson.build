@@ -17,7 +17,7 @@
 
 project (
   'zrythm', ['c', 'cpp'],
-  version: '1.0.0-alpha.13.1.1',
+  version: files ('VERSION'),
   license: 'AGPL-3-or-later',
   meson_version: '>= 0.57.0',
   default_options: [
@@ -49,7 +49,7 @@ sysconfdir = prefix / get_option ('sysconfdir')
 mandir = datadir / 'man' / 'man1'
 schemasdir = datadir / 'glib-2.0/schemas'
 fontsdir = datadir / 'fonts' / prog_name_lowercase
-zrythm_libdir = libdir / 'zrythm'
+zrythm_libdir = prefix / 'lib/zrythm'
 zrythmdatadir = datadir / prog_name_lowercase
 themesdir = zrythmdatadir / 'themes'
 samplesdir = zrythmdatadir / 'samples'
@@ -231,6 +231,9 @@ rubberband = find_program (
   'rubberband', required: false)
 cppcheck = find_program (
   'cppcheck', required: false)
+clang_tidy = find_program (
+  'clang-tidy', required: false)
+jq = find_program ('jq', required: false)
 
 ulimit = find_program (
   'tools/check_have_unlimited_memlock.sh')
@@ -258,6 +261,9 @@ ext_lv2_plugins = {
   'ams_lfo': [
     'AMS LFO',
     'http://github.com/blablack/ams-lv2/lfo'],
+  'calf_monosynth': [
+    'Calf Monosynth',
+    'http://calf.sourceforge.net/plugins/Monosynth'],
   'helm': [
     'Helm', 'http://tytel.org/helm'],
   'sherlock_atom_inspector': [
@@ -495,6 +501,9 @@ test_cflags = [
   '-DG_LOG_DOMAIN="' + prog_name_lowercase + '"',
   ]
 
+# Stricter flags to be used where needed
+test_strict_cflags = []
+
 # add attribute macros
 attributes = [
   'const', 'cold', 'hot', 'pure', 'nonnull',
@@ -542,6 +551,8 @@ if get_option ('extra_optimizations')
       '-DPIC',
       '-fdata-sections',
       '-ffunction-sections',
+      '-freciprocal-math',
+      '-fsingle-precision-constant',
       '-mtune=generic',
       '-msse',
       '-msse2',
@@ -559,6 +570,17 @@ if get_option ('extra_optimizations')
       '-fomit-frame-pointer',
       ]
   endif
+endif
+
+if get_option ('extra_extra_optimizations')
+  test_cflags += [
+    '-fallow-store-data-races',
+    '-ffinite-math-only',
+    '-fno-signed-zeros',
+    '-fno-trapping-math',
+    '-ffp-contract=fast',
+    '-fmodulo-sched',
+    ]
 endif
 
 if get_option ('extra_debug_info')
@@ -583,12 +605,11 @@ elif os_windows
     ]
 endif
 
-test_strict_cflags = [
+test_strict_cflags += [
   #'-Werror=cast-qual',
   '-Werror=clobbered',
   #'-Werror=conversion',
   '-Werror=disabled-optimization',
-  '-Werror=double-promotion',
   '-Werror=float-equal',
   '-Werror=logical-op',
   '-Werror=pointer-arith',
@@ -597,6 +618,7 @@ test_strict_cflags = [
   '-Werror=stringop-truncation',
   '-Werror=missing-declarations',
   '-Werror=int-to-pointer-cast',
+  #'-Werror=double-promotion',
   #'-Werror=redundant-decls',
   '-Werror=shadow',
   '-Werror=undef',
@@ -661,6 +683,7 @@ test_strict_cflags = [
   '-Werror=nonnull',
   '-Werror=nonnull-compare',
   '-Werror=pointer-size',
+  '-Werror=override-init',
   ]
 
 if cc.get_id() == 'gcc'
@@ -734,8 +757,10 @@ have_libsoundio = libsoundio_dep.found ()
 if (have_libsoundio)
   cdata.set('HAVE_LIBSOUNDIO', 1)
 endif
+# force patched version of libcyaml from subproject
+# see https://github.com/tlsa/libcyaml/issues/150
 cyaml_dep = dependency(
-  'libcyaml', required: false, version: '>=1.1.0',
+  'libcyaml', required: false, version: '>=99.1.0',
   static: all_static)
 if not cyaml_dep.found()
   cyaml_proj = subproject('libcyaml')
@@ -955,7 +980,8 @@ if portaudio_dep.found ()
 endif
 
 rtmidi_dep = dependency (
-  'rtmidi', required: get_option ('rtmidi'),
+  'rtmidi', version: '>= 4.0.0',
+  required: get_option ('rtmidi'),
   static: all_static)
 if not rtmidi_dep.found () and not get_option ('rtmidi').disabled ()
   rtmidi_proj = subproject('rtmidi')
@@ -1020,6 +1046,14 @@ if have_valgrind
   cdata.set ('HAVE_VALGRIND', 1)
 endif
 
+libbacktrace_dep = cc.find_library (
+  'backtrace', required: false)
+if not libbacktrace_dep.found ()
+  libbacktrace_proj = subproject ('libbacktrace')
+  libbacktrace_dep = libbacktrace_proj.get_variable ('libbacktrace_dep')
+endif
+cdata.set ('HAVE_LIBBACKTRACE', 1)
+
 # TODO add Cantarell font as dependency
 
 zrythm_deps = [
@@ -1049,12 +1083,14 @@ zrythm_deps = [
   lilv_dep,
   dependency ('rubberband'),
   dependency ('libpcre'),
+  dependency ('libpcre2-8'),
   cc.find_library ('dl', static: all_static),
   chromaprint_dep,
   fftw3_deps,
   gtksource_dep,
   lsp_dsp_dep,
   valgrind_dep,
+  libbacktrace_dep,
 
   libm,
 ]
@@ -1180,6 +1216,7 @@ subdir ('inc')
 subdir ('src')
 subdir ('tests')
 subdir ('doc')
+subdir ('tools')
 
 meson.add_install_script (
   'scripts/meson-post-install.sh')
@@ -1187,22 +1224,15 @@ meson.add_install_script (
 meson.add_dist_script (
   'scripts/meson_dist.sh')
 
-if cppcheck.found ()
-  run_target (
-    'cppcheck',
-    command : [
-      cppcheck,
-      '--project=' + meson_build_root / 'compile_commands.json',
-      ])
-endif
-
 summary ({
   'Program name': get_option ('program_name'),
-  'Build type': get_option ('buildtype'),
+  'Debug': get_option ('debug'),
+  'Optimization': get_option ('optimization'),
   'Profiling': get_option ('profiling'),
   'Strict flags': get_option ('strict_flags'),
   'Static deps': get_option ('static_deps'),
   'Extra optimizations': get_option ('extra_optimizations'),
+  'Extra extra optimizations': get_option ('extra_extra_optimizations'),
   'Build/install manpage': get_option ('manpage'),
   'Build/install user manual': get_option ('user_manual'),
   'Install DSEG font': get_option ('dseg_font'),

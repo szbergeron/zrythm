@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2020-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -48,10 +48,24 @@
 #endif
 
 #include "utils/backtrace.h"
+#include "utils/datetime.h"
+#include "utils/io.h"
+#include "utils/string.h"
+#include "zrythm.h"
+#include "zrythm_app.h"
 
 #include <gtk/gtk.h>
 
-#ifndef _WOE32
+#ifdef HAVE_LIBBACKTRACE
+#include <backtrace-supported.h>
+#include <backtrace.h>
+#if BACKTRACE_SUPPORTED
+#define CAN_USE_LIBBACKTRACE 1
+#endif
+#endif
+
+#if !defined (_WOE32) && \
+  !defined (CAN_USE_LIBBACKTRACE)
 /**
  * Resolve symbol name and source location given
  * the path to the executable and an address.
@@ -149,6 +163,69 @@ addr2line (
 }
 #endif
 
+#ifdef CAN_USE_LIBBACKTRACE
+static struct backtrace_state * state = NULL;
+
+static void
+syminfo_cb (
+  void *       data,
+  uintptr_t    pc,
+  const char * symname,
+  uintptr_t    symval,
+  uintptr_t    symsize)
+{
+  GString * msg_str = (GString *) data;
+
+  if (symname)
+    {
+      g_string_append_printf (
+        msg_str, " %s", symname);
+    }
+}
+
+static int
+full_cb (
+  void *       data,
+  uintptr_t    pc,
+  const char * filename,
+  int          lineno,
+  const char * function)
+{
+  GString * msg_str = (GString *) data;
+
+  if (filename)
+    {
+      g_string_append_printf (
+        msg_str, "%s", filename);
+    }
+  else
+    {
+      g_string_append_printf (
+        msg_str, "%s", "???");
+    }
+
+  if (function)
+    {
+      g_string_append_printf (
+        msg_str, " (%s:%d)",
+        function, lineno);
+    }
+  else
+    {
+      backtrace_syminfo (
+        state, pc, syminfo_cb, NULL, msg_str);
+    }
+
+  /*g_string_append_printf (*/
+    /*msg_str, " [%lu]\n", pc);*/
+  g_string_append_printf (
+    msg_str, "%s", "\n");
+
+  return 0;
+}
+
+#endif
+
 /**
  * Returns the backtrace with \ref max_lines
  * number of lines and a string prefix.
@@ -163,14 +240,65 @@ _backtrace_get (
   const char * exe_path,
   const char * prefix,
   int          max_lines,
-  bool         with_lines)
+  bool         with_lines,
+  bool         write_to_file)
 {
   char message[12000];
   char current_line[2000];
+  (void) current_line;
 
   strcpy (message, prefix);
 
-#ifdef _WOE32
+#ifdef CAN_USE_LIBBACKTRACE
+  GString * msg_str = g_string_new (prefix);
+
+  state =
+    backtrace_create_state (
+      exe_path, true, NULL, NULL);
+
+  if (write_to_file)
+    {
+      char * str_datetime =
+        datetime_get_for_filename ();
+      char * user_bt_dir =
+        zrythm_get_dir (ZRYTHM_DIR_USER_BACKTRACE);
+      char * backtrace_filepath =
+        g_strdup_printf (
+          "%s%sbacktrace_%s.txt",
+          user_bt_dir, G_DIR_SEPARATOR_S,
+          str_datetime);
+      io_mkdir (user_bt_dir);
+      FILE * f = fopen (backtrace_filepath, "a");
+      if (!f)
+        {
+          g_message (
+            "failed to open file %s",
+            backtrace_filepath);
+          g_free (str_datetime);
+          g_free (user_bt_dir);
+          g_free (backtrace_filepath);
+          goto call_backtrace_full;
+        }
+      backtrace_print (state, 0, f);
+      fclose (f);
+      g_free (str_datetime);
+      g_free (user_bt_dir);
+      g_free (backtrace_filepath);
+    }
+
+call_backtrace_full:
+  backtrace_full (
+    state, 0, full_cb, NULL, msg_str);
+
+  /* replace multiple instances of ??? with a single
+   * one */
+  char * bt_str = g_string_free (msg_str, false);
+  string_replace_regex (
+    &bt_str, "(\\?\\?\\?\n)+\\1", "??? ...\n");
+
+  return bt_str;
+
+#elif defined (_WOE32)
   unsigned int   i;
   void         * stack[ 100 ];
   unsigned short frames;

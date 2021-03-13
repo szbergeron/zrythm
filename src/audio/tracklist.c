@@ -254,7 +254,8 @@ tracklist_insert_track (
 
   /* make the track the only selected track */
   tracklist_selections_select_single (
-    TRACKLIST_SELECTIONS, track);
+    TRACKLIST_SELECTIONS, track,
+    publish_events);
 
   track_set_is_project (track, true);
 
@@ -269,7 +270,7 @@ tracklist_insert_track (
     }
 
   /* verify */
-  track_verify_identifiers (track);
+  track_validate (track);
 
   if (ZRYTHM_TESTING)
     {
@@ -411,7 +412,7 @@ tracklist_get_track_pos (
 }
 
 void
-tracklist_sanity_check (
+tracklist_validate (
   Tracklist * self)
 {
   for (int i = 0; i < self->num_tracks; i++)
@@ -420,7 +421,7 @@ tracklist_sanity_check (
 
       g_return_if_fail (
         track && track->is_project);
-      track_verify_identifiers (track);
+      track_validate (track);
     }
 }
 
@@ -686,7 +687,11 @@ tracklist_remove_track (
 {
   g_return_if_fail (self && IS_TRACK (track));
   g_message (
-    "%s: removing %s...", __func__, track->name);
+    "%s: removing %s - remove plugins %d - "
+    "free track %d - pub events %d - "
+    "recalc graph %d", __func__, track->name,
+    rm_pl, free_track, publish_events,
+    recalc_graph);
 
   Track * prev_visible =
     tracklist_get_prev_visible_track (
@@ -842,7 +847,7 @@ tracklist_move_track (
 
   /* make the track the only selected track */
   tracklist_selections_select_single (
-    TRACKLIST_SELECTIONS, track);
+    TRACKLIST_SELECTIONS, track, publish_events);
 
   if (recalc_graph)
     {

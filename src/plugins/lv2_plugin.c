@@ -596,6 +596,7 @@ create_port (
       else if (is_event)
         {
           pi->type = TYPE_EVENT;
+          pi->flags2 |= PORT_FLAG2_SUPPORTS_MIDI;
           if (!port->midi_events)
             {
               port->midi_events =
@@ -636,6 +637,14 @@ create_port (
                   pi->flags |=
                     PORT_FLAG_WANT_POSITION;
                   lv2_plugin->want_position = true;
+                }
+              if (lilv_nodes_contains (
+                    atom_supports,
+                    PM_GET_NODE (
+                      LV2_MIDI__MidiEvent)))
+                {
+                  pi->flags2 |=
+                    PORT_FLAG2_SUPPORTS_MIDI;
                 }
               if (lilv_nodes_contains (
                     atom_supports,
@@ -1042,28 +1051,34 @@ lv2_plugin_get_parameters (
               LILV_WORLD, property,
               PM_GET_NODE (LILV_NS_RDFS "label"),
               NULL);
-          const char * label_str =
-            lilv_node_as_string (label);
-          strncpy (
-            param->label, label_str,
-            MIN (
-              strlen (label_str) + 1,
-              LV2_PARAM_MAX_STR_LEN));
-          lilv_node_free (label);
+          if (label)
+            {
+              const char * label_str =
+                lilv_node_as_string (label);
+              strncpy (
+                param->label, label_str,
+                MIN (
+                  strlen (label_str) + 1,
+                  LV2_PARAM_MAX_STR_LEN));
+              lilv_node_free (label);
+            }
 
           LilvNode * comment =
             lilv_world_get (
               LILV_WORLD, property,
               PM_GET_NODE (LILV_NS_RDFS "comment"),
               NULL);
-          const char * comment_str =
-            lilv_node_as_string (comment);
-          strncpy (
-            param->comment, comment_str,
-            MIN (
-              strlen (comment_str) + 1,
-              LV2_PARAM_MAX_STR_LEN));
-          lilv_node_free (comment);
+          if (comment)
+            {
+              const char * comment_str =
+                lilv_node_as_string (comment);
+              strncpy (
+                param->comment, comment_str,
+                MIN (
+                  strlen (comment_str) + 1,
+                  LV2_PARAM_MAX_STR_LEN));
+              lilv_node_free (comment);
+            }
 
           LilvNode * min =
             lilv_world_get (
@@ -1188,7 +1203,7 @@ lv2_create_or_init_ports_and_parameters (
 #endif
     }
 
-  float* default_values =
+  float * default_values =
     object_new_n ((size_t) num_lilv_ports, float);
   lilv_plugin_get_port_ranges_float (
     self->lilv_plugin,
@@ -1236,7 +1251,8 @@ lv2_create_or_init_ports_and_parameters (
           self, (uint32_t) i,
           (i < num_lilv_ports) ?
             NULL : &params[i - num_lilv_ports],
-          default_values[i], ports_exist,
+          i < num_lilv_ports ?
+            default_values[i] : 0, ports_exist,
           project);
       g_return_val_if_fail (
         IS_PORT_AND_NONNULL (port), -1);
@@ -2864,15 +2880,21 @@ lv2_plugin_process (
           1.0 : 0.0);
       lv2_atom_forge_key (
         forge, PM_URIDS.time_barBeat);
+      int bars =
+        position_get_bars (&start_pos, true);
+      int beats =
+        position_get_beats (&start_pos, true);
+      double ticks =
+        position_get_ticks (&start_pos);
       lv2_atom_forge_float (
         forge,
-        ((float) start_pos.beats - 1) +
-        ((float) start_pos.ticks /
+        ((float) beats - 1) +
+        ((float) ticks /
           (float) TRANSPORT->ticks_per_beat));
       lv2_atom_forge_key (
         forge, PM_URIDS.time_bar);
       lv2_atom_forge_long (
-        forge, start_pos.bars - 1);
+        forge, bars - 1);
       lv2_atom_forge_key (
         forge, PM_URIDS.time_beatUnit);
       lv2_atom_forge_int (
