@@ -155,6 +155,7 @@ if get_option ('tests')
     'audio/audio_region': { parallel: true },
     'audio/audio_track': { parallel: true },
     'audio/automation_track': { parallel: true },
+    'audio/chord_track': { parallel: true },
     'audio/curve': { parallel: true },
     'audio/fader': { parallel: true },
     'audio/marker_track': { parallel: true },
@@ -174,7 +175,8 @@ if get_option ('tests')
     'gui/backend/arranger_selections': {
       parallel: true },
     'integration/recording': { parallel: false },
-    'plugins/carla_discovery': { parallel: false },
+    'plugins/carla_discovery': { parallel: true },
+    'plugins/carla_native_plugin': { parallel: false },
     'plugins/lv2_plugin': { parallel: false },
     'plugins/plugin': { parallel: false },
     'plugins/plugin_manager': { parallel: true },

@@ -251,12 +251,10 @@ zrythm_fetch_latest_release_ver (void)
   static char * ver = NULL;
   static bool called = false;
 
-  if (called)
+  if (called && ver)
     {
-      return ver;
+      return g_strdup (ver);
     }
-
-  called = true;
 
   char * page =
     z_curl_get_page_contents_default (
@@ -274,7 +272,13 @@ zrythm_fetch_latest_release_ver (void)
 
   g_return_val_if_fail (ver, NULL);
 
-  return ver;
+  if (ver)
+    {
+      g_debug ("latest release: %s", ver);
+      called = true;
+    }
+
+  return g_strdup (ver);
 }
 
 bool
@@ -354,15 +358,28 @@ zrythm_get_user_dir (
       return g_strdup (ZRYTHM->testing_dir);
     }
 
-  GSettings * settings =
-    g_settings_new (
-      GSETTINGS_ZRYTHM_PREFIX
-      ".preferences.general.paths");
-  g_return_val_if_fail (settings, NULL);
+  char * dir = NULL;
+  if (SETTINGS && S_P_GENERAL_PATHS)
+    {
+      dir =
+        g_settings_get_string (
+          S_P_GENERAL_PATHS, "zrythm-dir");
+    }
+  else
+    {
+      GSettings * settings =
+        g_settings_new (
+          GSETTINGS_ZRYTHM_PREFIX
+          ".preferences.general.paths");
+      g_return_val_if_fail (settings, NULL);
 
-  char * dir =
-    g_settings_get_string (
-      settings, "zrythm-dir");
+      dir =
+        g_settings_get_string (
+          settings, "zrythm-dir");
+
+      g_object_unref (settings);
+    }
+
   if (force_default || strlen (dir) == 0)
     {
       g_free (dir);
@@ -370,8 +387,6 @@ zrythm_get_user_dir (
         g_build_filename (
           g_get_user_data_dir (), "zrythm", NULL);
     }
-
-  g_object_unref (settings);
 
   return dir;
 }

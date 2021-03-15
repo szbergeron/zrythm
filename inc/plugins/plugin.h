@@ -208,6 +208,10 @@ typedef struct Plugin
    */
   GtkWindow *       window;
 
+  /** Whether show () has been called on the LV2
+   * external UI. */
+  bool              external_ui_visible;
+
   /** The GdkWindow of this widget should be
    * somewhere inside \ref Plugin.window and will
    * be used for wrapping plugin UIs in. */
@@ -232,12 +236,6 @@ typedef struct Plugin
   /** Whether this plugin is currently used in the
    * project. */
   bool              is_project;
-
-  /** Cache: whether the plugin has a custom UI. */
-  bool              has_custom_ui;
-
-  /** Whether the cache has been set. */
-  bool              has_custom_ui_set;
 
   /** Modulator widget, if modulator. */
   ModulatorWidget * modulator_widget;
@@ -681,14 +679,6 @@ plugin_open_ui (
 NONNULL
 bool
 plugin_is_selected (
-  Plugin * pl);
-
-/**
- * Returns whether the plugin has a custom UI.
- */
-NONNULL
-bool
-plugin_has_custom_ui (
   Plugin * pl);
 
 /**

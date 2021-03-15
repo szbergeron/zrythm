@@ -202,11 +202,11 @@ typedef struct Lv2Plugin
   /** Current preset. */
   LilvState*         preset;
   /** All plugin UIs (RDF data). */
-  LilvUIs*           uis;
+  //LilvUIs*           uis;
   /** Plugin UI (RDF data). */
-  const LilvUI*      ui;
+  //const LilvUI*      ui;
   /** The native UI type for this plugin. */
-  const LilvNode*    ui_type;
+  //const LilvNode*    ui_type;
   /** Plugin instance (shared library). */
   LilvInstance*      instance;
   /** Plugin UI host support. */
@@ -446,7 +446,25 @@ lv2_plugin_has_deprecated_ui (
   const char * uri);
 
 /**
- * Pick the most preferable UI.
+ * Returns whether the given UI uri is supported.
+ */
+NONNULL
+bool
+lv2_plugin_is_ui_supported (
+  const char * pl_uri,
+  const char * ui_uri);
+
+/**
+ * Returns the UI URIs that this plugin has.
+ */
+void
+lv2_plugin_get_uis (
+  const char * pl_uri,
+  char **      uris,
+  int *        num_uris);
+
+/**
+ * Pick the most preferable UI for the given flag.
  *
  * @param[out] ui (Output) UI of the specific
  *   plugin.
@@ -462,9 +480,58 @@ lv2_plugin_pick_ui (
   const LilvNode **   out_ui_type);
 
 NONNULL
+char *
+lv2_plugin_get_ui_class (
+  const char * pl_uri,
+  const char * ui_uri);
+
+/**
+ * Returns the bundle path of the UI as a URI.
+ */
+NONNULL
+char *
+lv2_plugin_get_ui_bundle_uri (
+  const char * pl_uri,
+  const char * ui_uri);
+
+/**
+ * Returns the binary path of the UI as a URI.
+ */
+NONNULL
+char *
+lv2_plugin_get_ui_binary_uri (
+  const char * pl_uri,
+  const char * ui_uri);
+
+/**
+ * Pick the most preferable UI.
+ *
+ * Calls lv2_plugin_pick_ui().
+ *
+ * @param[out] ui (Output) UI of the specific
+ *   plugin.
+ * @param[out] ui_type UI type (eg, X11).
+ *
+ * @return Whether a UI was picked.
+ */
+bool
+lv2_plugin_pick_most_preferable_ui (
+  const char * plugin_uri,
+  char **      out_ui,
+  char **      out_ui_type,
+  bool         allow_bridged);
+
+/* FIXME remove */
+NONNULL
 bool
 lv2_plugin_ui_type_is_external (
   const LilvNode * ui_type);
+
+NONNULL
+bool
+lv2_plugin_is_ui_external (
+  const char * uri,
+  const char * ui_uri);
 
 /**
  * Ported from Lv2Control.
