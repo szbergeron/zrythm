@@ -431,18 +431,16 @@ engine_pre_setup (
     {
       if (ZRYTHM_HAVE_UI && !ZRYTHM_TESTING)
         {
-          char str[600];
-          sprintf (
-            str,
+          ui_show_message_printf (
+            MAIN_WINDOW ?
+              GTK_WINDOW (MAIN_WINDOW) : NULL,
+            GTK_MESSAGE_WARNING,
             _("Failed to initialize the %s audio "
               "backend. Will use the dummy backend "
               "instead. Please check your backend "
               "settings in the Preferences."),
             engine_audio_backend_to_string (
               self->audio_backend));
-          ui_show_message_full (
-            GTK_WINDOW (MAIN_WINDOW),
-            GTK_MESSAGE_WARNING, str);
         }
 
       self->audio_backend =
@@ -457,6 +455,9 @@ engine_pre_setup (
   switch (self->midi_backend)
     {
     case MIDI_BACKEND_DUMMY:
+#ifdef HAVE_JACK
+setup_dummy_midi:
+#endif
       mret =
         engine_dummy_midi_setup (self);
       break;
@@ -470,8 +471,26 @@ engine_pre_setup (
 #endif
 #ifdef HAVE_JACK
     case MIDI_BACKEND_JACK:
-      mret =
-        engine_jack_midi_setup (self);
+      if (self->client)
+        {
+          mret =
+            engine_jack_midi_setup (self);
+        }
+      else
+        {
+          ui_show_message_printf (
+            NULL, GTK_MESSAGE_ERROR,
+            _("The JACK MIDI backend can only be "
+            "used with the JACK audio backend "
+            "(your current audio backend is %s). "
+            "Will use the dummy MIDI backend "
+            "instead."),
+            engine_audio_backend_to_string (
+              self->audio_backend));
+          self->midi_backend =
+            MIDI_BACKEND_DUMMY;
+          goto setup_dummy_midi;
+        }
       break;
 #endif
 #ifdef _WOE32
@@ -497,18 +516,15 @@ engine_pre_setup (
     {
       if (!ZRYTHM_TESTING)
         {
-          char * str =
-            g_strdup_printf (
-              _("Failed to initialize the %s MIDI "
-                "backend. Will use the dummy backend "
-                "instead. Please check your backend "
-                "settings in the Preferences."),
-              engine_midi_backend_to_string (
-                self->midi_backend));
-          ui_show_message_full (
+          ui_show_message_printf (
             GTK_WINDOW (MAIN_WINDOW),
-            GTK_MESSAGE_WARNING, str);
-          g_free (str);
+            GTK_MESSAGE_WARNING,
+            _("Failed to initialize the %s MIDI "
+              "backend. Will use the dummy backend "
+              "instead. Please check your backend "
+              "settings in the Preferences."),
+            engine_midi_backend_to_string (
+              self->midi_backend));
         }
 
       self->midi_backend = MIDI_BACKEND_DUMMY;
@@ -516,7 +532,8 @@ engine_pre_setup (
     }
 
   /* process any events now */
-  g_message ("processing engine events");
+  g_message (
+    "%s: processing engine events", __func__);
   engine_process_events (self);
 
   self->pre_setup = true;
@@ -532,6 +549,11 @@ engine_setup (
 {
   g_message ("Setting up...");
 
+  /* process any events now  */
+  g_message (
+    "%s: processing engine events", __func__);
+  engine_process_events (self);
+
   hardware_processor_setup (
     self->hw_in_processor);
 #if 0
@@ -544,16 +566,13 @@ engine_setup (
       (self->audio_backend != AUDIO_BACKEND_JACK &&
        self->midi_backend == MIDI_BACKEND_JACK))
     {
-      char * str =
-        g_strdup (
-          _("Your selected combination of backends "
-          "may not work properly. If you want to "
-          "use JACK, please select JACK as both "
-          "your audio and MIDI backend."));
-      ui_show_message_full (
+      ui_show_message_printf (
         GTK_WINDOW (MAIN_WINDOW),
-        GTK_MESSAGE_WARNING, str);
-      g_free (str);
+        GTK_MESSAGE_WARNING, "%s",
+        _("Your selected combination of backends "
+        "may not work properly. If you want to "
+        "use JACK, please select JACK as both "
+        "your audio and MIDI backend."));
     }
 
   self->buf_size_set = false;
@@ -757,9 +776,9 @@ init_common (
 
   if (backend_reset_to_dummy && !ZRYTHM_TESTING)
     {
-      char str[800];
-      sprintf (
-        str,
+      ui_show_message_printf (
+        GTK_WINDOW (MAIN_WINDOW),
+        GTK_MESSAGE_WARNING,
         _("The selected MIDI/audio backend was not "
           "found in the version of %s you have "
           "installed. The audio and MIDI backends "
@@ -767,9 +786,6 @@ init_common (
           "preferred backend from the "
           "preferences."),
         PROGRAM_NAME);
-      ui_show_message_full (
-        GTK_WINDOW (MAIN_WINDOW),
-        GTK_MESSAGE_WARNING, str);
     }
 
   self->pan_law =
@@ -999,6 +1015,11 @@ engine_activate (
           g_message ("already activated");
           return;
         }
+
+      /* process any events now  */
+      g_message (
+        "%s: processing engine events", __func__);
+      engine_process_events (self);
 
       engine_realloc_port_buffers (
         self, self->block_length);

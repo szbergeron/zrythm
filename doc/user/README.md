@@ -2,8 +2,11 @@ Zrythm User Manual
 ==================
 
 # Dependencies
-- Sphinx doc <http://sphinx-doc.org/>
+- [Sphinx doc](http://sphinx-doc.org/)
+- [furo](https://pypi.org/project/furo/) theme for HTML output
 - sphinx-intl
+- [sphinx-copybutton](https://pypi.org/project/sphinx-copybutton/)
+- [sphinxcontrib-svg2pdfconverter](https://pypi.org/project/sphinxcontrib-svg2pdfconverter/)
 - guile
 - `guix build utils` guile module (installed with guix package)
 - texlive (for PDF)
@@ -29,6 +32,10 @@ depending on where the current document is use
 reference it with
 
     :ref:`audio-bus-track`
+
+- To use zrythm-dark icons, use
+
+    |icon_zoom-in|
 
 
 Generally, prefer the 3rd option because files may

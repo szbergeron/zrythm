@@ -171,6 +171,32 @@ engine_jack_handle_sample_rate_change (
     "JACK: Sample rate changed to %d", samplerate);
 }
 
+static void
+process_change_request (
+  AudioEngine * self)
+{
+  /* process immediately if gtk thread */
+  if (g_thread_self () == zrythm_app->gtk_thread)
+    {
+      engine_process_events (self);
+    }
+  /* otherwise if activated wait for gtk thread
+   * to process all events */
+  else if (self->activated)
+    {
+      gint64 cur_time = g_get_monotonic_time ();
+      while (
+        cur_time >
+          self->last_events_process_started ||
+        cur_time > self->last_events_processed)
+        {
+          g_message (
+            "-------- waiting for change");
+          g_usleep (1000);
+        }
+    }
+}
+
 /**
  * Jack sample rate callback.
  *
@@ -193,26 +219,7 @@ sample_rate_cb (
     AUDIO_ENGINE_EVENT_SAMPLE_RATE_CHANGE,
     NULL, nframes);
 
-  /* if engine not activated then handle
-   * immediately, otherwise push to queue */
-  if (g_thread_self () == zrythm_app->gtk_thread)
-    {
-      engine_process_events (self);
-    }
-  else
-    {
-      /* wait for gtk thread to process all events */
-      gint64 cur_time = g_get_monotonic_time ();
-      while (
-        cur_time >
-          self->last_events_process_started ||
-        cur_time > self->last_events_processed)
-        {
-          g_message (
-            "-------- waiting sample rate change");
-          g_usleep (1000);
-        }
-    }
+  process_change_request (self);
 
 #if 0
   g_atomic_int_set (
@@ -247,29 +254,11 @@ buffer_size_cb (
   uint32_t      nframes,
   AudioEngine * self)
 {
-  /* if engine not activated then handle
-   * immediately, otherwise push to queue */
-  if (self->activated)
-    {
-      ENGINE_EVENTS_PUSH (
-        AUDIO_ENGINE_EVENT_BUFFER_SIZE_CHANGE,
-        NULL, nframes);
+  ENGINE_EVENTS_PUSH (
+    AUDIO_ENGINE_EVENT_BUFFER_SIZE_CHANGE,
+    NULL, nframes);
 
-      /* wait for gtk thread to process all events */
-      gint64 cur_time = g_get_monotonic_time ();
-      while (
-        cur_time > AUDIO_ENGINE->last_events_process_started ||
-        cur_time > AUDIO_ENGINE->last_events_processed)
-        {
-          g_message ("-------- waiting buffer size change");
-          g_usleep (1000);
-        }
-    }
-  else
-    {
-      engine_jack_handle_buf_size_change (
-        self, nframes);
-    }
+  process_change_request (self);
 
   return 0;
 }
@@ -474,6 +463,8 @@ int
 engine_jack_midi_setup (
   AudioEngine * self)
 {
+  g_message ("%s: Setting up JACK MIDI", __func__);
+
   /* TODO: case 1 - no jack client (using another
    * backend)
    *
