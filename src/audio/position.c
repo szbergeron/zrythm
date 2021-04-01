@@ -22,6 +22,7 @@
 #include "audio/engine.h"
 #include "audio/position.h"
 #include "audio/snap_grid.h"
+#include "audio/tempo_track.h"
 #include "audio/transport.h"
 #include "gui/widgets/arranger.h"
 #include "gui/widgets/bot_dock_edge.h"
@@ -101,6 +102,8 @@ position_set_to_bar (
   int        bar)
 {
   g_return_if_fail (TRANSPORT->ticks_per_bar > 0);
+
+  position_init (self);
 
   if (bar > 0)
     {
@@ -572,6 +575,7 @@ position_from_ticks (
   Position * pos,
   double     ticks)
 {
+  pos->schema_version = POSITION_SCHEMA_VERSION;
   pos->ticks = ticks;
   position_update_frames_from_ticks (pos);
 }
@@ -581,6 +585,7 @@ position_from_frames (
   Position * pos,
   long       frames)
 {
+  pos->schema_version = POSITION_SCHEMA_VERSION;
   pos->frames = frames;
   position_update_ticks_from_frames (pos);
 }
@@ -696,7 +701,24 @@ position_print (
 {
   char buf[140];
   position_to_string (pos, buf);
-  g_message ("%s", buf);
+  g_message ("%s (%ld)", buf, pos->frames);
+}
+
+void
+position_print_range (
+  const Position * pos,
+  const Position * pos2)
+{
+  char buf[140];
+  position_to_string (pos, buf);
+  char buf2[140];
+  position_to_string (pos2, buf2);
+  g_message (
+    "%s (%ld) - %s (%ld) "
+    "<delta %ld frames %f ticks>",
+    buf, pos->frames, buf2, pos2->frames,
+    pos2->frames - pos->frames,
+    pos2->ticks - pos->ticks);
 }
 
 /**
@@ -744,8 +766,9 @@ position_get_total_beats (
   int beats = position_get_beats (pos, false);
   int bars = position_get_bars (pos, false);
 
-  int ret =
-    beats + bars * TRANSPORT_BEATS_PER_BAR;
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (P_TEMPO_TRACK);
+  int ret = beats + bars * beats_per_bar;
 
   if (include_current || ret == 0)
     {
@@ -878,14 +901,18 @@ position_get_beats (
     ZRYTHM && PROJECT && TRANSPORT &&
     TRANSPORT->ticks_per_bar > 0 &&
     TRANSPORT->ticks_per_beat > 0 &&
-    TIME_SIG->beats_per_bar > 0, -1);
+    P_TEMPO_TRACK, -1);
+
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (P_TEMPO_TRACK);
+  g_return_val_if_fail (beats_per_bar > 0, -1);
 
   double total_bars =
     (double) position_get_bars (pos, false);
   double total_beats =
     pos->ticks / TRANSPORT->ticks_per_beat;
   total_beats -=
-    (double) (total_bars * TIME_SIG->beats_per_bar);
+    (double) (total_bars * beats_per_bar);
   if (total_beats >= 0.0)
     {
       int ret = (int) floor (total_beats);
@@ -973,36 +1000,14 @@ position_get_ticks (
      TICKS_PER_SIXTEENTH_NOTE_DBL);
 }
 
-#if 0
-/**
- * Gets the subticks of the position.
- *
- * Ie, if the position is equivalent to
- * 4.1.2.42.40124, this will return 0.40124.
- */
-double
-position_get_subticks (
+bool
+position_validate (
   const Position * pos)
 {
-  double remainder = fmod (self->ticks, 1);
+  if (!pos->schema_version)
+    {
+      return false;
+    }
 
-  double total_ticks = position_get_ticks (pos);
-  double ticks = pos->ticks - total_ticks;
-  double subticks = 0.0;
-  if (ticks >= 0)
-    {
-      subticks = ticks - floor (ticks);
-      ticks -= subticks;
-    }
-  else
-    {
-      subticks = ticks - ceil (ticks);
-      ticks -= subticks;
-    }
-  return subticks;
+  return true;
 }
-#endif
-
-SERIALIZE_SRC (Position, position)
-DESERIALIZE_SRC (Position, position)
-PRINT_YAML_SRC (Position, position)

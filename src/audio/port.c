@@ -28,9 +28,7 @@
 #include "audio/channel.h"
 #include "audio/clip.h"
 #include "audio/control_port.h"
-#ifdef HAVE_JACK
 #include "audio/engine_jack.h"
-#endif
 #include "audio/graph.h"
 #include "audio/hardware_processor.h"
 #include "audio/midi_event.h"
@@ -39,10 +37,12 @@
 #include "audio/router.h"
 #include "audio/rtaudio_device.h"
 #include "audio/rtmidi_device.h"
+#include "audio/tempo_track.h"
 #include "audio/windows_mme_device.h"
 #include "gui/backend/event.h"
 #include "gui/backend/event_manager.h"
 #include "gui/widgets/channel.h"
+#include "plugins/carla_native_plugin.h"
 #include "plugins/plugin.h"
 #include "plugins/lv2/lv2_ui.h"
 #include "utils/arrays.h"
@@ -424,12 +424,41 @@ port_find_from_identifier (
             {
               return tr->processor->input_gain;
             }
-          else if (flags &
-                PORT_FLAG_MIDI_AUTOMATABLE)
+          else if (flags2 &
+                     PORT_FLAG2_TP_OUTPUT_GAIN)
             {
-              return
-                tr->processor->midi_automatables[
-                  id->port_index];
+              return tr->processor->output_gain;
+            }
+          else if (flags &
+                     PORT_FLAG_MIDI_AUTOMATABLE)
+            {
+              if (flags2 &
+                    PORT_FLAG2_MIDI_PITCH_BEND)
+                {
+                  return
+                    tr->processor->pitch_bend[
+                      id->port_index];
+                }
+              else if (flags2 &
+                    PORT_FLAG2_MIDI_POLY_KEY_PRESSURE)
+                {
+                  return
+                    tr->processor->poly_key_pressure[
+                      id->port_index];
+                }
+              else if (flags2 &
+                    PORT_FLAG2_MIDI_CHANNEL_PRESSURE)
+                {
+                  return
+                    tr->processor->channel_pressure[
+                      id->port_index];
+                }
+              else
+                {
+                  return
+                    tr->processor->midi_cc[
+                      id->port_index];
+                }
             }
           break;
         default:
@@ -443,9 +472,13 @@ port_find_from_identifier (
         {
           return tr->bpm_port;
         }
-      else if (flags & PORT_FLAG_TIME_SIG)
+      else if (flags2 & PORT_FLAG2_BEATS_PER_BAR)
         {
-          return tr->time_sig_port;
+          return tr->beats_per_bar_port;
+        }
+      else if (flags2 & PORT_FLAG2_BEAT_UNIT)
+        {
+          return tr->beat_unit_port;
         }
       else if (
         flags & PORT_FLAG_MODULATOR_MACRO)
@@ -618,6 +651,27 @@ port_find_from_identifier (
           break;
         }
       break;
+    case PORT_OWNER_TYPE_CHANNEL_SEND:
+      g_warn_if_fail (id->track_pos > -1);
+      tr = TRACKLIST->tracks[id->track_pos];
+      g_warn_if_fail (tr);
+      ch = tr->channel;
+      g_warn_if_fail (ch);
+      if (id->flags2 &
+            PORT_FLAG2_CHANNEL_SEND_ENABLED)
+        {
+          return ch->sends[id->port_index]->enabled;
+        }
+      else if (id->flags2 &
+                 PORT_FLAG2_CHANNEL_SEND_AMOUNT)
+        {
+          return ch->sends[id->port_index]->amount;
+        }
+      else
+        {
+          g_return_val_if_reached (NULL);
+        }
+      break;
     case PORT_OWNER_TYPE_SAMPLE_PROCESSOR:
       if (flags & PORT_FLAG_STEREO_L)
         return SAMPLE_PROCESSOR->stereo_out->l;
@@ -724,8 +778,8 @@ _port_new (
 
   Port * self = object_new (Port);
 
-  self->id.plugin_id.slot = -1;
-  self->id.track_pos = -1;
+  self->schema_version = PORT_SCHEMA_VERSION;
+  port_identifier_init (&self->id);
   self->magic = PORT_MAGIC;
 
   self->num_dests = 0;
@@ -816,6 +870,7 @@ stereo_ports_new_from_existing (
   Port * l, Port * r)
 {
   StereoPorts * sp = object_new (StereoPorts);
+  sp->schema_version = STEREO_PORTS_SCHEMA_VERSION;
   sp->l = l;
   l->id.flags |= PORT_FLAG_STEREO_L;
   r->id.flags |= PORT_FLAG_STEREO_R;
@@ -1522,6 +1577,39 @@ port_set_owner_fader (
     }
 }
 
+/**
+ * Sets the channel send as the port's owner.
+ */
+void
+port_set_owner_channel_send (
+  Port *        port,
+  ChannelSend * send)
+{
+  PortIdentifier * id = &port->id;
+
+  id->track_pos = send->track_pos;
+  id->port_index = send->slot;
+  id->owner_type = PORT_OWNER_TYPE_CHANNEL_SEND;
+
+  if (id->flags2 & PORT_FLAG2_CHANNEL_SEND_ENABLED)
+    {
+      port->minf = 0.f;
+      port->maxf = 1.f;
+      port->zerof = 0.0f;
+    }
+  else if (id->flags2 &
+             PORT_FLAG2_CHANNEL_SEND_AMOUNT)
+    {
+      port->minf = 0.f;
+      port->maxf = 2.f;
+      port->zerof = 0.f;
+    }
+  else
+    {
+      g_return_if_reached ();
+    }
+}
+
 #if 0
 /**
  * Sets the owner fader & its ID.
@@ -2030,8 +2118,8 @@ port_update_track_pos (
               for (int j = 0; j < STRIP_SIZE; j++)
                 {
                   ChannelSend * send =
-                    &src_ch->sends[j];
-                  if (send->is_empty)
+                    src_ch->sends[j];
+                  if (channel_send_is_empty (send))
                     continue;
 
                   switch (src_track->out_signal_type)
@@ -2783,12 +2871,37 @@ port_set_control_value (
       /* if bpm, update engine */
       if (id->flags & PORT_FLAG_BPM)
         {
+          int beats_per_bar =
+            tempo_track_get_beats_per_bar (
+              P_TEMPO_TRACK);
           engine_update_frames_per_tick (
-            AUDIO_ENGINE,
-            TRANSPORT_BEATS_PER_BAR,
+            AUDIO_ENGINE, beats_per_bar,
             self->control,
-            AUDIO_ENGINE->sample_rate);
+            AUDIO_ENGINE->sample_rate, false);
           EVENTS_PUSH (ET_BPM_CHANGED, NULL);
+        }
+
+      /* if time sig value, update transport
+       * caches */
+      if (id->flags2 & PORT_FLAG2_BEATS_PER_BAR ||
+          id->flags2 & PORT_FLAG2_BEAT_UNIT)
+        {
+          int beats_per_bar =
+            tempo_track_get_beats_per_bar (
+              P_TEMPO_TRACK);
+          int beat_unit =
+            tempo_track_get_beat_unit (
+              P_TEMPO_TRACK);
+          bpm_t bpm =
+            tempo_track_get_current_bpm (
+              P_TEMPO_TRACK);
+          transport_update_caches (
+            TRANSPORT, beats_per_bar, beat_unit);
+          engine_update_frames_per_tick (
+            AUDIO_ENGINE, beats_per_bar, bpm,
+            AUDIO_ENGINE->sample_rate, false);
+          EVENTS_PUSH (
+            ET_TIME_SIGNATURE_CHANGED, NULL);
         }
 
       /* if plugin enabled port, also set
@@ -3578,21 +3691,36 @@ port_process (
             automation_track_should_read_automation (
               at, AUDIO_ENGINE->timestamp_start))
           {
+            /* FIXME optimize, calculate this
+             * once at the start of each cycle */
             Position pos;
             position_from_frames (
               &pos, g_start_frames);
+
+            /* if playhead pos changed manually
+             * recently or transport is rolling,
+             * we will force the last known
+             * automation point value regardless
+             * of whether there is a region at
+             * current pos */
+            bool can_read_previous_automation =
+              TRANSPORT_IS_ROLLING ||
+              TRANSPORT->last_manual_playhead_change -
+              AUDIO_ENGINE->last_timestamp_start > 0;
 
             /* if there was an automation event
              * at the playhead position, set val
              * and flag */
             AutomationPoint * ap =
               automation_track_get_ap_before_pos (
-                at, &pos);
+                at, &pos,
+                !can_read_previous_automation);
             if (ap)
               {
                 float val =
                   automation_track_get_val_at_pos (
-                    at, &pos, true);
+                    at, &pos, true,
+                    !can_read_previous_automation);
                 control_port_set_val_from_normalized (
                   port, val, true);
                 port->value_changed_from_reading =
@@ -3829,6 +3957,7 @@ port_get_full_designation (
     case PORT_OWNER_TYPE_TRACK_PROCESSOR:
     case PORT_OWNER_TYPE_PREFADER:
     case PORT_OWNER_TYPE_FADER:
+    case PORT_OWNER_TYPE_CHANNEL_SEND:
       {
         Track * tr = port_get_track (self, 1);
         g_return_if_fail (
@@ -4189,7 +4318,3 @@ port_free (Port * self)
 
   object_zero_and_free (self);
 }
-
-SERIALIZE_SRC (Port, port)
-DESERIALIZE_SRC (Port, port)
-PRINT_YAML_SRC (Port, port)

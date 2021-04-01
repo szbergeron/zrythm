@@ -262,6 +262,9 @@ test_delete_timeline ()
       TL_SELECTIONS);
   undo_manager_perform (UNDO_MANAGER, ua);
 
+  g_assert_false (
+    clip_editor_get_region (CLIP_EDITOR));
+
   /* check */
   check_timeline_objects_deleted (0);
   g_assert_cmpint (
@@ -301,6 +304,9 @@ test_delete_timeline ()
       (ArrangerSelections *) AUTOMATION_SELECTIONS),
     ==, 0);
   check_timeline_objects_deleted (0);
+
+  g_assert_false (
+    clip_editor_get_region (CLIP_EDITOR));
 
   /* undo again to prepare for next test */
   undo_manager_undo (UNDO_MANAGER);
@@ -2058,6 +2064,28 @@ test_midi_region_split ()
   test_helper_zrythm_cleanup ();
 }
 
+static void
+test_pin_unpin ()
+{
+  rebootstrap_timeline ();
+
+  ZRegion * r = P_CHORD_TRACK->chord_regions[0];
+  track_select (
+    P_CHORD_TRACK, F_SELECT, F_EXCLUSIVE,
+    F_NO_PUBLISH_EVENTS);
+  UndoableAction * ua =
+    tracklist_selections_action_new_unpin (
+      TRACKLIST_SELECTIONS);
+  undo_manager_perform (UNDO_MANAGER, ua);
+
+  g_assert_cmpint (
+    r->id.track_pos, ==, P_CHORD_TRACK->pos);
+
+  /* TODO more tests */
+
+  test_helper_zrythm_cleanup ();
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -2065,6 +2093,19 @@ main (int argc, char *argv[])
 
 #define TEST_PREFIX "/actions/arranger_selections/"
 
+  /*yaml_set_log_level (CYAML_LOG_INFO);*/
+  g_test_add_func (
+    TEST_PREFIX "test delete timeline",
+    (GTestFunc) test_delete_timeline);
+  g_test_add_func (
+    TEST_PREFIX "test split",
+    (GTestFunc) test_split);
+  g_test_add_func (
+    TEST_PREFIX "test pin unpin",
+    (GTestFunc) test_pin_unpin);
+  g_test_add_func (
+    TEST_PREFIX "test link timeline",
+    (GTestFunc) test_link_timeline);
   g_test_add_func (
     TEST_PREFIX "test delete chords",
     (GTestFunc) test_delete_chords);
@@ -2084,26 +2125,17 @@ main (int argc, char *argv[])
     TEST_PREFIX "test duplicate midi regions to track below",
     (GTestFunc) test_duplicate_midi_regions_to_track_below);
   g_test_add_func (
-    TEST_PREFIX "test delete timeline",
-    (GTestFunc) test_delete_timeline);
-  g_test_add_func (
     TEST_PREFIX "test move timeline",
     (GTestFunc) test_move_timeline);
   g_test_add_func (
     TEST_PREFIX "test duplicate timeline",
     (GTestFunc) test_duplicate_timeline);
   g_test_add_func (
-    TEST_PREFIX "test link timeline",
-    (GTestFunc) test_link_timeline);
-  g_test_add_func (
     TEST_PREFIX "test edit marker",
     (GTestFunc) test_edit_marker);
   g_test_add_func (
     TEST_PREFIX "test mute",
     (GTestFunc) test_mute);
-  g_test_add_func (
-    TEST_PREFIX "test split",
-    (GTestFunc) test_split);
   g_test_add_func (
     TEST_PREFIX "test quantize",
     (GTestFunc) test_quantize);

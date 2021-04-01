@@ -1743,8 +1743,7 @@ lv2_plugin_create_descriptor_from_lilv (
   lilv_nodes_free (required_features);
 
   /* set descriptor info */
-  PluginDescriptor * pd =
-    object_new (PluginDescriptor);
+  PluginDescriptor * pd = plugin_descriptor_new ();
   pd->protocol = PROT_LV2;
   pd->arch = ARCH_64;
   const char * str = lilv_node_as_string (name);
@@ -3164,12 +3163,16 @@ lv2_plugin_process (
         forge, bars - 1);
       lv2_atom_forge_key (
         forge, PM_URIDS.time_beatUnit);
-      lv2_atom_forge_int (
-        forge, TRANSPORT_BEAT_UNIT_INT);
+      int beats_per_bar =
+        tempo_track_get_beats_per_bar (
+          P_TEMPO_TRACK);
+      int beat_unit =
+        tempo_track_get_beat_unit (P_TEMPO_TRACK);
+      lv2_atom_forge_int (forge, beat_unit);
       lv2_atom_forge_key (
         forge, PM_URIDS.time_beatsPerBar);
       lv2_atom_forge_float (
-        forge, (float) TRANSPORT_BEATS_PER_BAR);
+        forge, (float) beats_per_bar);
       lv2_atom_forge_key (
         forge, PM_URIDS.time_beatsPerMinute);
       lv2_atom_forge_float (
@@ -3465,7 +3468,7 @@ lv2_plugin_populate_banks (
       LV2_ZRYTHM__defaultBank,
       _("Default bank"));
   PluginPreset * pl_def_preset =
-    object_new (PluginPreset);
+    plugin_preset_new ();
   pl_def_preset->uri =
     g_strdup (LV2_ZRYTHM__initPreset);
   pl_def_preset->name = g_strdup (_("Init"));
@@ -3486,6 +3489,7 @@ lv2_plugin_populate_banks (
     {
       const LilvNode* preset =
         lilv_nodes_get (presets, i);
+      lilv_world_load_resource (LILV_WORLD, preset);
 
       LilvNodes * banks =
         lilv_world_find_nodes (
@@ -3521,7 +3525,7 @@ lv2_plugin_populate_banks (
           const LilvNode* label =
             lilv_nodes_get_first(labels);
           PluginPreset * pl_preset =
-            object_new (PluginPreset);
+            plugin_preset_new ();
           pl_preset->uri =
             g_strdup (lilv_node_as_string (preset));
           pl_preset->name =
@@ -3543,6 +3547,10 @@ lv2_plugin_populate_banks (
             "no rdfs:label\n",
             lilv_node_as_string (preset));
         }
+      /* some plugins (Helm LV2) get stuck in an
+       * infinite loop when calling this */
+      /*lilv_world_unload_resource (*/
+        /*LILV_WORLD, preset);*/
     }
   lilv_nodes_free (presets);
 

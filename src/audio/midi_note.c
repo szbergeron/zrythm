@@ -54,10 +54,12 @@ midi_note_new (
 
   MidiNote * self = object_new (MidiNote);
 
+  self->schema_version = MIDI_NOTE_SCHEMA_VERSION;
   self->magic = MIDI_NOTE_MAGIC;
 
   ArrangerObject * obj =
     (ArrangerObject *) self;
+  arranger_object_init (obj);
   obj->pos = *start_pos;
   obj->end_pos = *end_pos;
   obj->type = ARRANGER_OBJECT_TYPE_MIDI_NOTE;
@@ -67,8 +69,6 @@ midi_note_new (
   self->val = val;
   self->vel =
     velocity_new (self, vel);
-
-  arranger_object_init (obj);
 
   return self;
 }

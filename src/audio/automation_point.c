@@ -53,10 +53,15 @@ _create_new (
   AutomationPoint * self =
     object_new (AutomationPoint);
 
+  self->schema_version =
+    AUTOMATION_POINT_SCHEMA_VERSION;
+
   ArrangerObject * obj =
     (ArrangerObject *) self;
+  arranger_object_init (obj);
   obj->pos = *pos;
   obj->type = ARRANGER_OBJECT_TYPE_AUTOMATION_POINT;
+  curve_opts_init (&self->curve_opts);
   self->curve_opts.curviness = 0;
   self->curve_opts.algo =
     ZRYTHM_TESTING ?
@@ -67,8 +72,6 @@ _create_new (
         "curve-algorithm");
 
   self->index = -1;
-
-  arranger_object_init (obj);
 
   return self;
 }
@@ -92,7 +95,7 @@ automation_point_set_region_and_index (
 
   /* set the info to the transient too */
   if ((ZRYTHM_HAVE_UI || ZRYTHM_TESTING) &&
-      obj->transient &&
+      PROJECT->loaded && obj->transient &&
       arranger_object_should_orig_be_visible (obj))
     {
       ArrangerObject * trans_obj = obj->transient;

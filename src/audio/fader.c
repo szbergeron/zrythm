@@ -104,6 +104,7 @@ fader_new (
 {
   Fader * self = object_new (Fader);
 
+  self->schema_version = FADER_SCHEMA_VERSION;
   self->magic = FADER_MAGIC;
 
   self->passthrough = passthrough;
@@ -124,13 +125,14 @@ fader_new (
       TYPE_CONTROL, FLOW_INPUT,
       passthrough ?
         _("Prefader Volume") : _("Fader Volume"));
-  self->amp->maxf = 2.f;
-  port_set_control_value (self->amp, amp, 0, 0);
+  port_set_control_value (
+    self->amp, amp, F_NOT_NORMALIZED,
+    F_NO_PUBLISH_EVENTS);
   self->fader_val =
     math_get_fader_val_from_amp (amp);
-  port_set_owner_fader (self->amp, self);
   self->amp->id.flags |=
     PORT_FLAG_AMPLITUDE;
+  port_set_owner_fader (self->amp, self);
   if ((type == FADER_TYPE_AUDIO_CHANNEL ||
       type == FADER_TYPE_MIDI_CHANNEL) &&
       !passthrough)

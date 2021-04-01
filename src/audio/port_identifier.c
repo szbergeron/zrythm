@@ -18,8 +18,19 @@
  */
 
 #include "audio/port_identifier.h"
+#include "plugins/plugin_identifier.h"
 #include "utils/objects.h"
 #include "utils/string.h"
+
+void
+port_identifier_init (
+  PortIdentifier * self)
+{
+  self->schema_version =
+    PORT_IDENTIFIER_SCHEMA_VERSION;
+  self->track_pos = -1;
+  plugin_identifier_init (&self->plugin_id);
+}
 
 /**
  * Copy the identifier content from \ref src to
@@ -33,6 +44,7 @@ port_identifier_copy (
   PortIdentifier * src)
 {
   g_return_if_fail (dest != src);
+  dest->schema_version = src->schema_version;
   string_copy_w_realloc (
     &dest->label, src->label);
   string_copy_w_realloc (
@@ -45,6 +57,7 @@ port_identifier_copy (
   dest->type = src->type;
   dest->flow = src->flow;
   dest->flags = src->flags;
+  dest->flags2 = src->flags2;
   plugin_identifier_copy (
     &dest->plugin_id, &src->plugin_id);
   string_copy_w_realloc (
@@ -71,6 +84,7 @@ port_identifier_is_equal (
     dest->type == src->type &&
     dest->flow == src->flow &&
     dest->flags == src->flags &&
+    dest->flags2 == src->flags2 &&
     dest->track_pos == src->track_pos &&
     string_is_equal (
       dest->port_group, src->port_group) &&

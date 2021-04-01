@@ -733,12 +733,67 @@ lock_memory (void)
 #ifdef _WOE32
   /* TODO */
 #else
-  /* lock down memory */
-  g_message ("Locking down memory...");
-  if (mlockall (MCL_CURRENT | MCL_FUTURE))
+
+  bool have_unlimited_mem = false;
+
+  struct rlimit rl;
+  if (getrlimit (RLIMIT_MEMLOCK, &rl) == 0)
     {
-      g_warning ("Cannot lock down memory: %s",
-                 strerror (errno));
+      if (rl.rlim_max == RLIM_INFINITY)
+        {
+          if (rl.rlim_cur == RLIM_INFINITY)
+            {
+              have_unlimited_mem = true;
+            }
+          else
+            {
+              rl.rlim_cur = RLIM_INFINITY;
+              if (setrlimit (
+                    RLIMIT_MEMLOCK, &rl) == 0)
+                {
+                  have_unlimited_mem = true;
+                }
+              else
+                {
+                  ui_show_error_message (
+                    NULL,
+                    "Could not set system memory "
+                    "lock limit to 'unlimited'");
+                }
+            }
+        }
+      else
+        {
+          ui_show_message_printf (
+            NULL, GTK_MESSAGE_WARNING,
+            "Your user does not have enough "
+            "privileges to allow %s to lock "
+            "unlimited memory. This may cause "
+            "audio dropouts. Please refer to "
+            "the user manual for details.",
+            PROGRAM_NAME);
+        }
+    }
+  else
+    {
+      ui_show_message_printf (
+        NULL, GTK_MESSAGE_WARNING,
+        "Could not get system memory lock limit "
+        "(%s)",
+        strerror (errno));
+    }
+
+  if (have_unlimited_mem)
+    {
+      /* lock down memory */
+      g_message ("Locking down memory...");
+      if (mlockall (MCL_CURRENT | MCL_FUTURE))
+        {
+          ui_show_message_printf (
+            NULL, GTK_MESSAGE_WARNING,
+            "Cannot lock down memory: %s",
+            strerror (errno));
+        }
     }
 #endif
 }
@@ -867,12 +922,6 @@ zrythm_app_startup (
     zrythm_new (
       exe_path ? exe_path : self->argv[0], true,
       false, true);
-
-  /* allow maximum number of open files (taken from
-   * ardour) */
-  raise_open_file_limit ();
-
-  lock_memory ();
 
   char * ver = zrythm_get_version (0);
   fprintf (
@@ -1181,6 +1230,12 @@ zrythm_app_startup (
   /* set default window icon */
   gtk_window_set_default_icon_name ("zrythm");
 
+  /* allow maximum number of open files (taken from
+   * ardour) */
+  raise_open_file_limit ();
+
+  lock_memory ();
+
   /* show splash screen */
   self->splash =
     splash_window_widget_new (self);
@@ -1471,7 +1526,7 @@ on_handle_local_options (
   GVariantDict * opts,
   ZrythmApp *    self)
 {
-  g_message ("handling options");
+  /*g_debug ("handling options");*/
 
 #if 0
   /* print the contents */

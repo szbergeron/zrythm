@@ -39,6 +39,8 @@
  * @{
  */
 
+#define PORT_IDENTIFIER_SCHEMA_VERSION 1
+
 #define PORT_IDENTIFIER_MAGIC 3411841
 #define IS_PORT_IDENTIFIER(tr) \
   (tr && \
@@ -106,6 +108,9 @@ typedef enum PortOwnerType
   /* track fader */
   PORT_OWNER_TYPE_FADER,
 
+  /** Channel send. */
+  PORT_OWNER_TYPE_CHANNEL_SEND,
+
   /* track prefader */
   PORT_OWNER_TYPE_PREFADER,
 
@@ -132,6 +137,7 @@ port_owner_type_strings[] =
   { "track",     PORT_OWNER_TYPE_TRACK   },
   { "pre-fader", PORT_OWNER_TYPE_PREFADER   },
   { "fader",     PORT_OWNER_TYPE_FADER   },
+  { "channel send", PORT_OWNER_TYPE_CHANNEL_SEND  },
   { "track processor",
     PORT_OWNER_TYPE_TRACK_PROCESSOR   },
   { "monitor fader",
@@ -235,9 +241,6 @@ typedef enum PortFlags
   /** This is a BPM port. */
   PORT_FLAG_BPM = 1 << 22,
 
-  /** This is a time signature port. */
-  PORT_FLAG_TIME_SIG = 1 << 23,
-
   /**
    * Generic plugin port not belonging to the
    * underlying plugin.
@@ -245,19 +248,19 @@ typedef enum PortFlags
    * This is for ports that are added by Zrythm
    * such as Enabled and Gain.
    */
-  PORT_FLAG_GENERIC_PLUGIN_PORT = 1 << 24,
+  PORT_FLAG_GENERIC_PLUGIN_PORT = 1 << 23,
 
   /** This is the plugin gain. */
-  PORT_FLAG_PLUGIN_GAIN = 1 << 25,
+  PORT_FLAG_PLUGIN_GAIN = 1 << 24,
 
   /** Track processor input mono switch. */
-  PORT_FLAG_TP_MONO = 1 << 26,
+  PORT_FLAG_TP_MONO = 1 << 25,
 
   /** Track processor input gain. */
-  PORT_FLAG_TP_INPUT_GAIN = 1 << 27,
+  PORT_FLAG_TP_INPUT_GAIN = 1 << 26,
 
   /** Port is a hardware port. */
-  PORT_FLAG_HW = 1 << 28,
+  PORT_FLAG_HW = 1 << 27,
 
   /**
    * Port is part of a modulator macro processor.
@@ -265,10 +268,10 @@ typedef enum PortFlags
    * Which of the ports it is can be determined
    * by checking flow/type.
    */
-  PORT_FLAG_MODULATOR_MACRO = 1 << 29,
+  PORT_FLAG_MODULATOR_MACRO = 1 << 28,
 
   /** Logarithmic. */
-  PORT_FLAG_LOGARITHMIC = 1 << 30,
+  PORT_FLAG_LOGARITHMIC = 1 << 29,
 
   /**
    * Plugin control is a property (changes are set
@@ -280,7 +283,7 @@ typedef enum PortFlags
    * both).
    *
    * @seealso http://lv2plug.in/ns/lv2core#Parameter. */
-  PORT_FLAG_IS_PROPERTY = 1 << 31,
+  PORT_FLAG_IS_PROPERTY = 1 << 30,
 } PortFlags;
 
 typedef enum PortFlags2
@@ -309,6 +312,30 @@ typedef enum PortFlags2
 
   /** Atom or event port supports MIDI. */
   PORT_FLAG2_SUPPORTS_MIDI = 1 << 10,
+
+  /** Track processor output gain. */
+  PORT_FLAG2_TP_OUTPUT_GAIN = 1 << 11,
+
+  /** MIDI pitch bend. */
+  PORT_FLAG2_MIDI_PITCH_BEND = 1 << 12,
+
+  /** MIDI poly key pressure. */
+  PORT_FLAG2_MIDI_POLY_KEY_PRESSURE = 1 << 13,
+
+  /** MIDI channel pressure. */
+  PORT_FLAG2_MIDI_CHANNEL_PRESSURE = 1 << 14,
+
+  /** Channel send enabled. */
+  PORT_FLAG2_CHANNEL_SEND_ENABLED = 1 << 15,
+
+  /** Channel send amount. */
+  PORT_FLAG2_CHANNEL_SEND_AMOUNT = 1 << 16,
+
+  /** Beats per bar. */
+  PORT_FLAG2_BEATS_PER_BAR = 1 << 17,
+
+  /** Beat unit. */
+  PORT_FLAG2_BEAT_UNIT = 1 << 18,
 } PortFlags2;
 
 static const cyaml_bitdef_t
@@ -337,15 +364,14 @@ port_flags_bitvals[] =
   { .name = "midi_automatable", .offset = 20, .bits = 1 },
   { .name = "send_receivable", .offset = 21, .bits = 1 },
   { .name = "bpm", .offset = 22, .bits = 1 },
-  { .name = "time_sig", .offset = 23, .bits = 1 },
-  { .name = "generic_plugin_port", .offset = 24, .bits = 1 },
-  { .name = "plugin_gain", .offset = 25, .bits = 1 },
-  { .name = "tp_mono", .offset = 26, .bits = 1 },
-  { .name = "tp_input_gain", .offset = 27, .bits = 1 },
-  { .name = "hw", .offset = 28, .bits = 1 },
-  { .name = "modulator_macro", .offset = 29, .bits = 1 },
-  { .name = "logarithmic", .offset = 30, .bits = 1 },
-  { .name = "is_property", .offset = 31, .bits = 1 },
+  { .name = "generic_plugin_port", .offset = 23, .bits = 1 },
+  { .name = "plugin_gain", .offset = 24, .bits = 1 },
+  { .name = "tp_mono", .offset = 25, .bits = 1 },
+  { .name = "tp_input_gain", .offset = 26, .bits = 1 },
+  { .name = "hw", .offset = 27, .bits = 1 },
+  { .name = "modulator_macro", .offset = 28, .bits = 1 },
+  { .name = "logarithmic", .offset = 29, .bits = 1 },
+  { .name = "is_property", .offset = 30, .bits = 1 },
 };
 
 static const cyaml_bitdef_t
@@ -362,6 +388,14 @@ port_flags2_bitvals[] =
   { .name = "uri_param", .offset = 8, .bits = 1 },
   { .name = "sequence", .offset = 9, .bits = 1 },
   { .name = "supports_midi", .offset = 10, .bits = 1 },
+  { .name = "output_gain", .offset = 11, .bits = 1 },
+  { .name = "pitch_bend", .offset = 12, .bits = 1 },
+  { .name = "poly_key_pressure", .offset = 13, .bits = 1 },
+  { .name = "channel_pressure", .offset = 14, .bits = 1 },
+  { .name = "ch_send_enabled", .offset = 15, .bits = 1 },
+  { .name = "ch_send_amount", .offset = 16, .bits = 1 },
+  { .name = "beats_per_bar", .offset = 17, .bits = 1 },
+  { .name = "beat_unit", .offset = 18, .bits = 1 },
 };
 
 /**
@@ -376,6 +410,8 @@ port_flags2_bitvals[] =
  */
 typedef struct PortIdentifier
 {
+  int                 schema_version;
+
   /** Human readable label. */
   char *              label;
 
@@ -438,6 +474,8 @@ port_type_strings[] =
 static const cyaml_schema_field_t
 port_identifier_fields_schema[] =
 {
+  YAML_FIELD_INT (
+    PortIdentifier, schema_version),
   YAML_FIELD_STRING_PTR_OPTIONAL (
     PortIdentifier, label),
   YAML_FIELD_STRING_PTR_OPTIONAL (
@@ -476,17 +514,19 @@ port_identifier_fields_schema[] =
 
 static const cyaml_schema_value_t
 port_identifier_schema = {
-  CYAML_VALUE_MAPPING (
-    CYAML_FLAG_POINTER,
+  YAML_VALUE_PTR (
     PortIdentifier, port_identifier_fields_schema),
 };
 
 static const cyaml_schema_value_t
 port_identifier_schema_default = {
-  CYAML_VALUE_MAPPING (
-    CYAML_FLAG_DEFAULT,
+  YAML_VALUE_DEFAULT (
     PortIdentifier, port_identifier_fields_schema),
 };
+
+void
+port_identifier_init (
+  PortIdentifier * self);
 
 static inline const char *
 port_identifier_get_label (

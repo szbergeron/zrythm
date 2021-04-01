@@ -17,6 +17,12 @@
  * along with Zrythm.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file
+ *
+ * Automation track.
+ */
+
 #ifndef __AUDIO_AUTOMATION_TRACK_H__
 #define __AUDIO_AUTOMATION_TRACK_H__
 
@@ -24,11 +30,6 @@
 #include "audio/port.h"
 #include "audio/position.h"
 #include "audio/region.h"
-
-#define MAX_AUTOMATION_POINTS 1200
-
-/** Relase time in ms when in touch record mode. */
-#define AUTOMATION_RECORDING_TOUCH_REL_MS 800
 
 typedef struct Port Port;
 typedef struct _AutomationTrackWidget
@@ -40,6 +41,19 @@ typedef struct CustomButtonWidget
   CustomButtonWidget;
 typedef struct AutomationModeWidget
   AutomationModeWidget;
+
+/**
+ * @addtogroup audio
+ *
+ * @{
+ */
+
+#define AUTOMATION_TRACK_SCHEMA_VERSION 1
+
+#define MAX_AUTOMATION_POINTS 1200
+
+/** Relase time in ms when in touch record mode. */
+#define AUTOMATION_RECORDING_TOUCH_REL_MS 800
 
 typedef enum AutomationMode
 {
@@ -75,6 +89,8 @@ automation_record_mode_strings[] =
 
 typedef struct AutomationTrack
 {
+  int               schema_version;
+
   /** Index in parent AutomationTracklist. */
   int               index;
 
@@ -167,6 +183,8 @@ static const cyaml_schema_field_t
   automation_track_fields_schema[] =
 {
   YAML_FIELD_INT (
+    AutomationTrack, schema_version),
+  YAML_FIELD_INT (
     AutomationTrack, index),
   YAML_FIELD_MAPPING_EMBEDDED (
     AutomationTrack, port_id,
@@ -189,8 +207,7 @@ static const cyaml_schema_field_t
 static const cyaml_schema_value_t
   automation_track_schema =
 {
-  CYAML_VALUE_MAPPING (
-    CYAML_FLAG_POINTER,
+  YAML_VALUE_PTR (
     AutomationTrack,
     automation_track_fields_schema),
 };
@@ -378,23 +395,35 @@ automation_track_get_track (
   AutomationTrack * self);
 
 /**
- * Returns the automation point before the pos.
+ * Returns the automation point before the Position
+ * on the timeline.
+ *
+ * @param ends_after Whether to only check in
+ *   regions that also end after \ref pos (ie,
+ *   the region surrounds \ref pos), otherwise
+ *   check in the region that ends last.
  */
 NONNULL
 AutomationPoint *
 automation_track_get_ap_before_pos (
   const AutomationTrack * self,
-  const Position *        pos);
+  const Position *        pos,
+  bool                    ends_after);
 
 /**
- * Returns the ZRegion that surrounds the
+ * Returns the ZRegion that starts before
  * given Position, if any.
+ *
+ * @param ends_after Whether to only check for
+ *   regions that also end after \ref pos (ie,
+ *   the region surrounds \ref pos), otherwise
+ *   get the region that ends last.
  */
-NONNULL
 ZRegion *
 automation_track_get_region_before_pos (
   const AutomationTrack * self,
-  const Position *        pos);
+  const Position *        pos,
+  bool                    ends_after);
 
 /**
  * Unselects all arranger objects.
@@ -432,13 +461,18 @@ automation_track_clear (
  *
  * @param normalized Whether to return the value
  *   normalized.
+ * @param ends_after Whether to only check in
+ *   regions that also end after \ref pos (ie,
+ *   the region surrounds \ref pos), otherwise
+ *   check in the region that ends last.
  */
 NONNULL
 float
 automation_track_get_val_at_pos (
   AutomationTrack * at,
   Position *        pos,
-  bool              normalized);
+  bool              normalized,
+  bool              ends_after);
 
 /**
  * Returns the y pixels from the value based on the

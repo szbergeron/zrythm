@@ -710,12 +710,6 @@ project_create_default (
 
   self->audio_engine = engine_new (self);
 
-  /* pre-setup engine */
-  if (with_engine)
-    {
-      engine_pre_setup (self->audio_engine);
-    }
-
   /* init undo manager */
   self->undo_manager = undo_manager_new ();
 
@@ -743,6 +737,18 @@ project_create_default (
     TRACKLIST, track, F_NO_PUBLISH_EVENTS,
     F_NO_RECALC_GRAPH);
   self->tracklist->tempo_track = track;
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (track);
+  int beat_unit =
+    tempo_track_get_beat_unit (track);
+  bpm_t bpm =
+    tempo_track_get_current_bpm (track);
+  transport_update_caches (
+    self->audio_engine->transport, beats_per_bar,
+    beat_unit);
+  engine_update_frames_per_tick (
+    self->audio_engine, beats_per_bar, bpm,
+    self->audio_engine->sample_rate, true);
 
   /* modulator */
   g_message ("adding modulator track...");
@@ -780,6 +786,12 @@ project_create_default (
     self->tracklist_selections, track, 0);
   self->last_selection = SELECTION_TYPE_TRACKLIST;
 
+  /* pre-setup engine */
+  if (with_engine)
+    {
+      engine_pre_setup (self->audio_engine);
+    }
+
   engine_setup (self->audio_engine);
 
   if (with_engine)
@@ -804,9 +816,9 @@ project_create_default (
     }
 
   engine_update_frames_per_tick (
-    AUDIO_ENGINE, TRANSPORT_BEATS_PER_BAR,
+    AUDIO_ENGINE, beats_per_bar,
     tempo_track_get_current_bpm (P_TEMPO_TRACK),
-    AUDIO_ENGINE->sample_rate);
+    AUDIO_ENGINE->sample_rate, true);
 
   /* create untitled project */
   create_and_set_dir_and_title (
@@ -1022,7 +1034,9 @@ load (
       yaml_size + sizeof (char));
   yaml[yaml_size] = '\0';
 
-  Project * self = project_deserialize (yaml);
+  Project * self =
+    (Project *)
+    yaml_deserialize (yaml, &project_schema);
   free (yaml);
   if (!self)
     {
@@ -1058,8 +1072,35 @@ load (
     }
   g_message ("Project successfully deserialized.");
 
+  /* if template, also copy the pool and plugin
+   * states */
   if (is_template)
     {
+      char * prev_pool_dir =
+        g_build_filename (
+          dir, PROJECT_POOL_DIR, NULL);
+      char * new_pool_dir =
+        g_build_filename (
+          ZRYTHM->create_project_path,
+          PROJECT_POOL_DIR, NULL);
+      char * prev_plugins_dir =
+        g_build_filename (
+          dir, PROJECT_PLUGINS_DIR, NULL);
+      char * new_plugins_dir =
+        g_build_filename (
+          ZRYTHM->create_project_path,
+          PROJECT_PLUGINS_DIR, NULL);
+      io_copy_dir (
+        new_pool_dir, prev_pool_dir,
+        F_NO_FOLLOW_SYMLINKS, F_RECURSIVE);
+      io_copy_dir (
+        new_plugins_dir, prev_plugins_dir,
+        F_NO_FOLLOW_SYMLINKS, F_RECURSIVE);
+      g_free (prev_pool_dir);
+      g_free (new_pool_dir);
+      g_free (prev_plugins_dir);
+      g_free (new_plugins_dir);
+
       g_free (dir);
       dir =
         g_strdup (ZRYTHM->create_project_path);
@@ -1109,16 +1150,25 @@ load (
 
   engine_init_loaded (self->audio_engine);
   engine_pre_setup (self->audio_engine);
-  undo_manager_init_loaded (self->undo_manager);
+  if (self->undo_manager)
+    {
+      undo_manager_init_loaded (self->undo_manager);
+    }
+  else
+    {
+      self->undo_manager = undo_manager_new ();
+    }
 
   clip_editor_init_loaded (self->clip_editor);
   timeline_init_loaded (self->timeline);
   tracklist_init_loaded (self->tracklist);
 
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (P_TEMPO_TRACK);
   engine_update_frames_per_tick (
-    AUDIO_ENGINE, TRANSPORT_BEATS_PER_BAR,
+    AUDIO_ENGINE, beats_per_bar,
     tempo_track_get_current_bpm (P_TEMPO_TRACK),
-    AUDIO_ENGINE->sample_rate);
+    AUDIO_ENGINE->sample_rate, true);
 
   /* init ports */
   size_t max_size = 20;
@@ -1225,8 +1275,8 @@ load (
  */
 int
 project_load (
-  char *    filename,
-  const int is_template)
+  char *     filename,
+  const bool is_template)
 {
   g_message (
     "%s: filename: %s, is template: %d",
@@ -1448,6 +1498,8 @@ project_new (
   g_message ("%s: Creating...", __func__);
 
   Project * self = object_new (Project);
+  self->schema_version =
+    PROJECT_SCHEMA_VERSION;
 
   if (_zrythm)
     {
@@ -1459,6 +1511,7 @@ project_new (
   self->timeline = timeline_new ();
   self->tracklist_selections =
     tracklist_selections_new (true);
+  mixer_selections_init (&self->mixer_selections);
 
   g_message ("%s: done", __func__);
 
@@ -1514,7 +1567,9 @@ serialize_project_thread (
   g_message ("serializing project to yaml...");
   GError *err = NULL;
   gint64 time_before = g_get_monotonic_time ();
-  char * yaml = project_serialize (&data->project);
+  char * yaml =
+    yaml_serialize (
+      &data->project, &project_schema);
   gint64 time_after = g_get_monotonic_time ();
   g_message (
     "time to serialize: %ldms",
@@ -1732,6 +1787,9 @@ project_save (
         }
     }
 
+  /* write the pool */
+  audio_pool_write_to_disk (AUDIO_POOL);
+
   /* save UI positions */
   if (ZRYTHM_HAVE_UI)
     {
@@ -1855,7 +1913,3 @@ project_save (
 
   RETURN_OK;
 }
-
-SERIALIZE_SRC (Project, project)
-DESERIALIZE_SRC (Project, project)
-PRINT_YAML_SRC (Project, project)

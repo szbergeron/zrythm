@@ -32,6 +32,7 @@
 #include "gui/backend/event_manager.h"
 #include "gui/widgets/main_window.h"
 #include "plugins/cached_plugin_descriptors.h"
+#include "plugins/lv2_plugin.h"
 #include "plugins/plugin.h"
 #include "plugins/plugin_manager.h"
 #include "plugins/carla/carla_discovery.h"
@@ -225,11 +226,11 @@ host_dispatcher (
   float opt)
 {
   /* TODO */
-  g_debug ("host dispatcher (opcode %d)", opcode);
+  /*g_debug ("host dispatcher (opcode %d)", opcode);*/
   switch (opcode)
     {
     case NATIVE_HOST_OPCODE_HOST_IDLE:
-      g_debug ("host idle");
+      /*g_debug ("host idle");*/
       /* some expensive computation is happening.
        * this is used so that the GTK ui does not
        * block */
@@ -582,7 +583,7 @@ carla_native_plugin_populate_banks (
       LV2_ZRYTHM__defaultBank,
       _("Default bank"));
   PluginPreset * pl_def_preset =
-    object_new (PluginPreset);
+    plugin_preset_new ();
   pl_def_preset->uri =
     g_strdup (LV2_ZRYTHM__initPreset);
   pl_def_preset->name = g_strdup (_("Init"));
@@ -597,7 +598,7 @@ carla_native_plugin_populate_banks (
   for (uint32_t i = 0; i < count; i++)
     {
       PluginPreset * pl_preset =
-        object_new (PluginPreset);
+        plugin_preset_new ();
       pl_preset->carla_program = (int) i;
       pl_preset->name =
         g_strdup (
@@ -683,10 +684,13 @@ carla_native_plugin_process (
   self->time_info.bbt.barStartTick =
     (double)
     (PLAYHEAD->ticks - bar_start.ticks);
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (P_TEMPO_TRACK);
+  int beat_unit =
+    tempo_track_get_beat_unit (P_TEMPO_TRACK);
   self->time_info.bbt.beatsPerBar =
-    (float) TRANSPORT_BEATS_PER_BAR;
-  self->time_info.bbt.beatType =
-    (float) TRANSPORT_BEAT_UNIT_INT;
+    (float) beats_per_bar;
+  self->time_info.bbt.beatType = (float) beat_unit;
   self->time_info.bbt.ticksPerBeat =
     TRANSPORT->ticks_per_beat;
   self->time_info.bbt.beatsPerMinute =
@@ -791,7 +795,8 @@ carla_native_plugin_process (
 
       int num_events =
         port ? port->midi_events->num_events : 0;
-      NativeMidiEvent events[4000];
+#define MAX_EVENTS 4000
+      NativeMidiEvent events[MAX_EVENTS];
       int num_events_written = 0;
       for (i = 0; i < num_events; i++)
         {
@@ -831,6 +836,13 @@ carla_native_plugin_process (
           events[num_events_written].data[2] =
             ev->raw_buffer[2];
           num_events_written++;
+
+          if (num_events_written == MAX_EVENTS)
+            {
+              g_warning (
+                "written %d events", MAX_EVENTS);
+              break;
+            }
         }
       if (num_events_written > 0)
         {
@@ -943,7 +955,7 @@ carla_native_plugin_get_descriptor_from_cached (
   PluginType              type)
 {
   PluginDescriptor * descr =
-    object_new (PluginDescriptor);
+    plugin_descriptor_new ();
 
   switch (type)
     {

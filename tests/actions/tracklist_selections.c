@@ -598,11 +598,12 @@ assert_sends_connected (
   if (src)
     {
       bool prefader_connected =
-        !src->channel->sends[0].is_empty;
+        channel_send_is_enabled (
+          src->channel->sends[0]);
       bool fader_connected =
-        !src->channel->sends[
-          CHANNEL_SEND_POST_FADER_START_SLOT].
-            is_empty;
+        channel_send_is_enabled (
+          src->channel->sends[
+            CHANNEL_SEND_POST_FADER_START_SLOT]);
       bool pl_ports_connected =
         src->channel->inserts[0]->out_ports[
           pl_out_port_idx]->num_dests > 0;
@@ -652,13 +653,13 @@ test_track_deletion_with_sends (
     TRACKLIST->tracks[TRACKLIST->num_tracks - 1];
   ua =
     channel_send_action_new_connect_audio (
-      &audio_fx_for_sending->channel->sends[0],
+      audio_fx_for_sending->channel->sends[0],
       audio_fx_for_receiving->processor->
         stereo_in);
   undo_manager_perform (UNDO_MANAGER, ua);
   ua =
     channel_send_action_new_connect_audio (
-      &audio_fx_for_sending->channel->sends[
+      audio_fx_for_sending->channel->sends[
         CHANNEL_SEND_POST_FADER_START_SLOT],
       audio_fx_for_receiving->processor->
         stereo_in);
@@ -1009,8 +1010,7 @@ test_ins_track_deletion_w_automation (void)
 
   track =
     TRACKLIST->tracks[TRACKLIST->num_tracks - 1];
-  g_assert_true (
-    track_validate (track));
+  g_assert_true (track_validate (track));
 
   /* delete it */
   ua =
@@ -1142,7 +1142,7 @@ _test_move_tracks (
   g_assert_true (
     fx_track->type == TRACK_TYPE_AUDIO_BUS);
 
-  ChannelSend * send = &ins_track->channel->sends[0];
+  ChannelSend * send = ins_track->channel->sends[0];
   StereoPorts * stereo_in =
     fx_track->processor->stereo_in;
   channel_send_connect_stereo (
@@ -1150,7 +1150,7 @@ _test_move_tracks (
     NULL, false);
 
   /* check that the sends are correct */
-  g_assert_true (!send->is_empty);
+  g_assert_true (channel_send_is_enabled (send));
   g_assert_true (
     port_identifier_is_equal (
       &send->dest_l_id, &stereo_in->l->id) &&
@@ -1197,7 +1197,7 @@ _test_move_tracks (
     }
   g_assert_true (
     fx_track->type == TRACK_TYPE_AUDIO_BUS);
-  send = &ins_track->channel->sends[0];
+  send = ins_track->channel->sends[0];
   stereo_in =
     fx_track->processor->stereo_in;
   g_assert_cmpint (
@@ -1205,7 +1205,7 @@ _test_move_tracks (
   g_assert_cmpint (
     stereo_in->r->id.track_pos, ==, 3);
   g_assert_cmpint (send->track_pos, ==, 4);
-  g_assert_true (!send->is_empty);
+  g_assert_true (channel_send_is_enabled (send));
   g_assert_true (
     port_identifier_is_equal (
       &send->dest_l_id, &stereo_in->l->id) &&
@@ -1259,7 +1259,7 @@ _test_move_tracks (
     }
   g_assert_true (
     fx_track->type == TRACK_TYPE_AUDIO_BUS);
-  send = &ins_track->channel->sends[0];
+  send = ins_track->channel->sends[0];
   stereo_in =
     fx_track->processor->stereo_in;
   g_assert_cmpint (
@@ -1267,7 +1267,7 @@ _test_move_tracks (
   g_assert_cmpint (
     stereo_in->r->id.track_pos, ==, 4);
   g_assert_cmpint (send->track_pos, ==, 3);
-  g_assert_true (!send->is_empty);
+  g_assert_true (channel_send_is_enabled (send));
   g_assert_true (
     port_identifier_is_equal (
       &send->dest_l_id, &stereo_in->l->id) &&
@@ -1531,6 +1531,19 @@ main (int argc, char *argv[])
 #define TEST_PREFIX "/actions/tracklist_selections/"
 
   g_test_add_func (
+    TEST_PREFIX "test ins track deletion with automation",
+    (GTestFunc) test_ins_track_deletion_w_automation);
+  g_test_add_func (
+    TEST_PREFIX
+    "test target track deletion with sends",
+    (GTestFunc)
+    test_target_track_deletion_with_sends);
+  g_test_add_func (
+    TEST_PREFIX
+    "test source track deletion with sends",
+    (GTestFunc)
+    test_source_track_deletion_with_sends);
+  g_test_add_func (
     TEST_PREFIX
     "test port and plugin track pos after duplication",
     (GTestFunc)
@@ -1555,24 +1568,11 @@ main (int argc, char *argv[])
     (GTestFunc)
     test_create_ins_when_redo_stack_nonempty);
   g_test_add_func (
-    TEST_PREFIX "test ins track deletion with automation",
-    (GTestFunc) test_ins_track_deletion_w_automation);
-  g_test_add_func (
     TEST_PREFIX "test undo track deletion",
     (GTestFunc) test_undo_track_deletion);
   g_test_add_func (
     TEST_PREFIX "test group track deletion",
     (GTestFunc) test_group_track_deletion);
-  g_test_add_func (
-    TEST_PREFIX
-    "test target track deletion with sends",
-    (GTestFunc)
-    test_target_track_deletion_with_sends);
-  g_test_add_func (
-    TEST_PREFIX
-    "test source track deletion with sends",
-    (GTestFunc)
-    test_source_track_deletion_with_sends);
   g_test_add_func (
     TEST_PREFIX "test audio track deletion",
     (GTestFunc) test_audio_track_deletion);

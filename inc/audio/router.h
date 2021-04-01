@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2019-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -98,6 +98,8 @@ typedef struct Router
 
   /** Used when recalculating the graph. */
   ZixSem      graph_access;
+
+  bool        callback_in_progress;
 
 } Router;
 

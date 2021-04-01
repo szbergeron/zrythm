@@ -210,6 +210,7 @@ track_init (
   Track *   self,
   const int add_lane)
 {
+  self->schema_version = TRACK_SCHEMA_VERSION;
   self->visible = 1;
   self->main_height = TRACK_DEF_HEIGHT;
   self->midi_ch = 1;
@@ -924,6 +925,12 @@ track_validate (
         }
     }
 
+  for (int i = 0; i < self->num_chord_regions; i++)
+    {
+      ZRegion * r = self->chord_regions[i];
+      region_validate (r, self->is_project);
+    }
+
   g_message ("done");
 
   return true;
@@ -1202,37 +1209,66 @@ track_generate_automation_tracks (
 
   if (track_type_has_channel (track->type))
     {
+      Channel * ch = track->channel;
+
       /* -- fader -- */
 
       /* volume */
       at =
-        automation_track_new (
-          track->channel->fader->amp);
+        automation_track_new (ch->fader->amp);
       automation_tracklist_add_at (atl, at);
       at->created = 1;
       at->visible = 1;
 
       /* balance */
       at =
-        automation_track_new (
-          track->channel->fader->balance);
+        automation_track_new (ch->fader->balance);
       automation_tracklist_add_at (atl, at);
 
       /* mute */
       at =
-        automation_track_new (
-          track->channel->fader->mute);
+        automation_track_new (ch->fader->mute);
       automation_tracklist_add_at (atl, at);
+
+      /* --- end fader --- */
+
+      /* sends */
+      for (int i = 0; i < STRIP_SIZE; i++)
+        {
+          at =
+            automation_track_new (
+              ch->sends[i]->amount);
+          automation_tracklist_add_at (atl, at);
+        }
     }
 
   if (track_has_piano_roll (track))
     {
       /* midi automatables */
-      for (int i = 0;
-           i < NUM_MIDI_AUTOMATABLES * 16; i++)
+      for (int i = 0; i < 16; i++)
         {
-          Port * cc =
-            track->processor->midi_automatables[i];
+          Port * cc = NULL;
+          for (int j = 0; j < 128; j++)
+            {
+              cc =
+                track->processor->midi_cc[
+                  i * 128 + j];
+              at = automation_track_new (cc);
+              automation_tracklist_add_at (atl, at);
+            }
+
+          cc =
+            track->processor->pitch_bend[i];
+          at = automation_track_new (cc);
+          automation_tracklist_add_at (atl, at);
+
+          cc =
+            track->processor->poly_key_pressure[i];
+          at = automation_track_new (cc);
+          automation_tracklist_add_at (atl, at);
+
+          cc =
+            track->processor->channel_pressure[i];
           at = automation_track_new (cc);
           automation_tracklist_add_at (atl, at);
         }
@@ -1249,7 +1285,11 @@ track_generate_automation_tracks (
       automation_tracklist_add_at (atl, at);
       at =
         automation_track_new (
-          track->time_sig_port);
+          track->beats_per_bar_port);
+      automation_tracklist_add_at (atl, at);
+      at =
+        automation_track_new (
+          track->beat_unit_port);
       automation_tracklist_add_at (atl, at);
       break;
     case TRACK_TYPE_MODULATOR:
@@ -1266,6 +1306,11 @@ track_generate_automation_tracks (
             }
           automation_tracklist_add_at (atl, at);
         }
+      break;
+    case TRACK_TYPE_AUDIO:
+      at =
+        automation_track_new (
+          track->processor->output_gain);
       break;
     default:
       break;
@@ -1579,6 +1624,12 @@ track_set_pos (
     {
       marker_set_track_pos (
         self->markers[i], pos);
+    }
+
+  for (int i = 0; i < self->num_chord_regions; i++)
+    {
+      ZRegion * r = self->chord_regions[i];
+      region_set_track_pos (r, pos);
     }
 
   track_processor_set_track_pos (
@@ -3103,7 +3154,8 @@ track_append_all_ports (
     {
       /* add bpm/time sig ports */
       _ADD (self->bpm_port);
-      _ADD (self->time_sig_port);
+      _ADD (self->beats_per_bar_port);
+      _ADD (self->beat_unit_port);
     }
   else if (self->type == TRACK_TYPE_MODULATOR)
     {
@@ -3192,11 +3244,17 @@ track_free (Track * self)
       object_free_w_func_and_null (
         port_free, self->bpm_port);
     }
-  if (self->time_sig_port)
+  if (self->beats_per_bar_port)
     {
-      port_disconnect_all (self->time_sig_port);
+      port_disconnect_all (self->beats_per_bar_port);
       object_free_w_func_and_null (
-        port_free, self->time_sig_port);
+        port_free, self->beats_per_bar_port);
+    }
+  if (self->beats_per_bar_port)
+    {
+      port_disconnect_all (self->beat_unit_port);
+      object_free_w_func_and_null (
+        port_free, self->beat_unit_port);
     }
 
 #undef _FREE_TRACK

@@ -42,14 +42,13 @@ test_export (void)
   g_assert_nonnull (midi_files);
   char * export_dir =
     g_dir_make_tmp ("test_midi_export_XXXXXX", NULL);
-
-  Position init_pos;
-  position_set_to_bar (&init_pos, 1);
   char * midi_file;
   int iter = 0;
   while ((midi_file = midi_files[iter++]))
     {
       g_message ("testing %s", midi_file);
+
+      test_helper_zrythm_init ();
 
       SupportedFile * file =
         supported_file_new_from_path (midi_file);
@@ -91,21 +90,25 @@ test_export (void)
           G_FILE_TEST_EXISTS |
             G_FILE_TEST_IS_REGULAR));
 
+      io_remove (export_filepath);
+
       g_free (basename);
       g_free (export_filepath);
+
+      test_helper_zrythm_cleanup ();
 
       if (iter == max_files)
         break;
     }
   g_strfreev (midi_files);
+
+  io_rmdir (export_dir, true);
 }
 
 int
 main (int argc, char *argv[])
 {
   g_test_init (&argc, &argv, NULL);
-
-  test_helper_zrythm_init ();
 
 #define TEST_PREFIX "/audio/midi_region/"
 

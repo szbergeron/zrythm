@@ -53,6 +53,8 @@ audio_pool_new ()
 {
   AudioPool * self = object_new (AudioPool);
 
+  self->schema_version = AUDIO_POOL_SCHEMA_VERSION;
+
   self->clips_size = 2;
   self->clips =
     object_new_n (self->clips_size, AudioClip *);
@@ -305,6 +307,22 @@ audio_pool_reload_clip_frame_bufs (
           free (clip->frames);
           clip->frames = NULL;
         }
+    }
+}
+
+/**
+ * Writes all the clips to disk.
+ *
+ * Used when saving a project elsewhere.
+ */
+void
+audio_pool_write_to_disk (
+  AudioPool * self)
+{
+  for (int i = 0; i < self->num_clips; i++)
+    {
+      AudioClip * clip = self->clips[i];
+      audio_clip_write_to_pool (clip, false);
     }
 }
 

@@ -67,8 +67,8 @@ audio_region_new (
   int              idx_inside_lane)
 {
   ZRegion * self = object_new (ZRegion);
-  ArrangerObject * obj =
-    (ArrangerObject *) self;
+  /*ArrangerObject * obj =*/
+    /*(ArrangerObject *) self;*/
 
   g_return_val_if_fail (
     start_pos && start_pos->frames >= 0, NULL);
@@ -114,10 +114,11 @@ audio_region_new (
     }
 
   /* set end pos to sample end */
+  Position end_pos;
   position_set_to_pos (
-    &obj->end_pos, start_pos);
+    &end_pos, start_pos);
   position_add_frames (
-    &obj->end_pos, clip->num_frames);
+    &end_pos, clip->num_frames);
 
   /* init split points */
   self->split_points_size = 1;
@@ -134,7 +135,7 @@ audio_region_new (
 
   /* init */
   region_init (
-    self, start_pos, &obj->end_pos, track_pos,
+    self, start_pos, &end_pos, track_pos,
     lane_pos, idx_inside_lane);
 
   (void) recording;
@@ -326,17 +327,46 @@ audio_region_fill_stereo_ports (
   dsp_fill (lbuf_after_ts, 0, nframes);
   dsp_fill (rbuf_after_ts, 0, nframes);
 
-  long r_local_pos_at_start =
+#if 0
+  double r_local_ticks_at_start =
+    g_start_pos.ticks - r->base.pos.ticks;
+  double r_len =
+    arranger_object_get_length_in_ticks (r_obj);
+  double ratio =
+    r_local_ticks_at_start / r_len;
+  g_message ("ratio %f", ratio);
+#endif
+
+  long r_local_frames_at_start =
     region_timeline_frames_to_local (
       r, g_start_frames, F_NORMALIZE);
+
+#if 0
+  Position r_local_pos_at_start;
+  position_from_frames (
+    &r_local_pos_at_start, r_local_frames_at_start);
+  Position r_local_pos_at_end;
+  position_from_frames (
+    &r_local_pos_at_end,
+    r_local_frames_at_start + nframes);
+
+  g_message ("region");
+  position_print_range (
+    &r->base.pos, &r->base.end_pos);
+  g_message ("g start pos");
+  position_print (&g_start_pos);
+  g_message ("region local pos start/end");
+  position_print_range (
+    &r_local_pos_at_start, &r_local_pos_at_end);
+#endif
 
   size_t buff_index_start =
     (size_t) clip->num_frames + 16;
   size_t buff_size = 0;
   unsigned int prev_offset = local_start_frame;
   for (nframes_t j =
-         (r_local_pos_at_start < 0) ?
-           - r_local_pos_at_start : 0;
+         (r_local_frames_at_start < 0) ?
+           - r_local_frames_at_start : 0;
        j < nframes; j++)
     {
       long current_local_frame =
@@ -410,8 +440,11 @@ prev_offset, \
             }
         }
       /* else if no need for timestretch */
-      else if (!needs_rt_timestretch)
+      else
         {
+          g_return_if_fail (
+            buff_index >= 0 &&
+            buff_index < clip->num_frames);
           lbuf_after_ts[j] =
             clip->ch_frames[0][buff_index];
           rbuf_after_ts[j] =

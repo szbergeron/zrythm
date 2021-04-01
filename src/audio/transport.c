@@ -53,6 +53,8 @@ static void
 init_common (
   Transport * self)
 {
+  self->schema_version = TRANSPORT_SCHEMA_VERSION;
+
   /* set playstate */
   self->play_state = PLAYSTATE_PAUSED;
 
@@ -78,19 +80,19 @@ init_common (
       S_TRANSPORT, "recording-mode");
 
   zix_sem_init (&self->paused, 0);
-
-  /* update time sig */
-  transport_set_time_sig (
-    self, &self->time_sig);
 }
 
 void
 transport_init_loaded (
   Transport * self)
 {
-  transport_set_time_sig (self, &self->time_sig);
-
   init_common (self);
+  int beats_per_bar =
+    tempo_track_get_beats_per_bar (P_TEMPO_TRACK);
+  int beat_unit =
+    tempo_track_get_beat_unit (P_TEMPO_TRACK);
+  transport_update_caches (
+    self, beats_per_bar, beat_unit);
 }
 
 /**
@@ -114,20 +116,8 @@ transport_new (
   self->total_bars =
     TRANSPORT_DEFAULT_TOTAL_BARS;
 
-  /* set BPM related defaults */
-  self->time_sig.beats_per_bar =
-    TRANSPORT_DEFAULT_BEATS_PER_BAR;
-  self->time_sig.beat_unit = 4;
-
-  /* update time sig */
-  transport_set_time_sig (
-    self, &self->time_sig);
-
   g_return_val_if_fail (
     engine->sample_rate > 0, NULL);
-  engine_update_frames_per_tick (
-    engine, self->time_sig.beats_per_bar, 140,
-    engine->sample_rate);
 
   /* hack to allow setting positions */
   /*double frames_per_tick_before =*/
@@ -142,6 +132,11 @@ transport_new (
   position_init (&self->playhead_pos);
   position_init (&self->cue_pos);
   position_init (&self->loop_start_pos);
+  position_init (&self->loop_end_pos);
+  position_init (&self->punch_in_pos);
+  position_init (&self->punch_out_pos);
+  position_init (&self->range_1);
+  position_init (&self->range_2);
 
   double ticks_per_bar =
     TICKS_PER_QUARTER_NOTE * 4.0;
@@ -334,8 +329,7 @@ transport_stretch_audio_regions (
 
           /* don't stretch regions with musical
            * mode off */
-          if (region->musical_mode ==
-                REGION_MUSICAL_MODE_OFF)
+          if (!region_get_musical_mode (region))
             continue;
 
           ArrangerObject * r_obj =
@@ -369,8 +363,8 @@ transport_stretch_audio_regions (
 
                   /* don't stretch regions with
                    * musical mode off */
-                  if (region->musical_mode ==
-                        REGION_MUSICAL_MODE_OFF)
+                  if (!region_get_musical_mode (
+                         region))
                     continue;
 
                   ArrangerObject * r_obj =
@@ -429,12 +423,11 @@ transport_set_recording_mode (
  * Updates beat unit and anything depending on it.
  */
 void
-transport_set_time_sig (
-  Transport *     self,
-  TimeSignature * time_sig)
+transport_update_caches (
+  Transport * self,
+  int         beats_per_bar,
+  int         beat_unit)
 {
-  self->time_sig = *time_sig;
-
   /**
    * Regarding calculation:
    * 3840 = TICKS_PER_QUARTER_NOTE * 4 to get the ticks
@@ -444,70 +437,14 @@ transport_set_time_sig (
    * with the ticks per note
    */
   self->ticks_per_beat =
-    3840.0 / (double) self->time_sig.beat_unit;
+    3840.0 / (double) beat_unit;
   self->ticks_per_bar =
-    (self->ticks_per_beat *
-     self->time_sig.beats_per_bar);
-  self->sixteenths_per_beat =
-    16 / self->time_sig.beat_unit;
+    (self->ticks_per_beat * beats_per_bar);
+  self->sixteenths_per_beat = 16 / beat_unit;
   self->sixteenths_per_bar =
-    (self->sixteenths_per_beat *
-     self->time_sig.beats_per_bar);
+    (self->sixteenths_per_beat * beats_per_bar);
   g_warn_if_fail (self->ticks_per_bar > 0.0);
   g_warn_if_fail (self->ticks_per_beat > 0.0);
-}
-
-void
-time_signature_set_beat_unit_from_enum (
-  TimeSignature * self,
-  BeatUnit        ebeat_unit)
-{
-  switch (ebeat_unit)
-    {
-    case BEAT_UNIT_2:
-      self->beat_unit = 2;
-      break;
-    case BEAT_UNIT_4:
-      self->beat_unit = 4;
-      break;
-    case BEAT_UNIT_8:
-      self->beat_unit = 8;
-      break;
-    case BEAT_UNIT_16:
-      self->beat_unit = 16;
-      break;
-    default:
-      g_warn_if_reached ();
-      break;
-    }
-}
-
-BeatUnit
-time_signature_get_beat_unit_enum (
-  int beat_unit)
-{
-  switch (beat_unit)
-    {
-    case 2:
-      return BEAT_UNIT_2;
-    case 4:
-      return BEAT_UNIT_4;
-    case 8:
-      return BEAT_UNIT_8;
-    case 16:
-      return BEAT_UNIT_16;;
-    default:
-      break;
-    }
-  g_return_val_if_reached (0);
-}
-
-void
-time_signature_set_beat_unit (
-  TimeSignature * self,
-  int             beat_unit)
-{
-  self->beat_unit = beat_unit;
 }
 
 void
@@ -524,7 +461,7 @@ transport_request_pause (
     {
       transport_move_playhead (
         self, &self->cue_pos, F_PANIC,
-        F_NO_SET_CUE_POINT);
+        F_NO_SET_CUE_POINT, F_NO_PUBLISH_EVENTS);
     }
 }
 
@@ -596,7 +533,8 @@ transport_move_playhead (
   Transport * self,
   Position *  target,
   bool        panic,
-  bool        set_cue_point)
+  bool        set_cue_point,
+  bool        fire_events)
 {
   int i, j, k, l;
   /* send MIDI note off on currently playing timeline
@@ -660,8 +598,16 @@ transport_move_playhead (
       position_set_to_pos (&self->cue_pos, target);
     }
 
-  EVENTS_PUSH (
-    ET_PLAYHEAD_POS_CHANGED_MANUALLY, NULL);
+  if (fire_events)
+    {
+      /* FIXME use another flag to decide when
+       * to do this */
+      self->last_manual_playhead_change =
+        g_get_monotonic_time ();
+
+      EVENTS_PUSH (
+        ET_PLAYHEAD_POS_CHANGED_MANUALLY, NULL);
+    }
 }
 
 /**
@@ -684,9 +630,11 @@ double
 transport_get_ppqn (
   Transport * self)
 {
+  int beat_unit =
+    tempo_track_get_beat_unit (P_TEMPO_TRACK);
   double res =
     self->ticks_per_beat *
-    ((double) self->time_sig.beat_unit / 4.0);
+    ((double) beat_unit / 4.0);
   return res;
 }
 
@@ -761,7 +709,8 @@ transport_goto_prev_marker (
         {
           transport_move_playhead (
             self, &markers[i - 1], F_PANIC,
-            F_SET_CUE_POINT);
+            F_SET_CUE_POINT,
+            F_PUBLISH_EVENTS);
           break;
         }
       else if (
@@ -770,7 +719,8 @@ transport_goto_prev_marker (
         {
           transport_move_playhead (
             self, &markers[i],
-            F_PANIC, F_SET_CUE_POINT);
+            F_PANIC, F_SET_CUE_POINT,
+            F_PUBLISH_EVENTS);
           break;
         }
     }
@@ -792,7 +742,7 @@ transport_goto_next_marker (
         {
           transport_move_playhead (
             self, &markers[i], F_PANIC,
-            F_SET_CUE_POINT);
+            F_SET_CUE_POINT, F_PUBLISH_EVENTS);
           break;
         }
     }
@@ -1080,7 +1030,8 @@ transport_move_backward (
       &PROJECT->snap_grid_timeline,
       &self->playhead_pos, true);
   transport_move_playhead (
-    self, pos, F_PANIC, F_SET_CUE_POINT);
+    self, pos, F_PANIC, F_SET_CUE_POINT,
+    F_PUBLISH_EVENTS);
 }
 
 /**
@@ -1095,7 +1046,8 @@ transport_move_forward (
       &PROJECT->snap_grid_timeline,
       &self->playhead_pos, false);
   transport_move_playhead (
-    self, pos, F_PANIC, F_SET_CUE_POINT);
+    self, pos, F_PANIC, F_SET_CUE_POINT,
+    F_PUBLISH_EVENTS);
 }
 
 /**

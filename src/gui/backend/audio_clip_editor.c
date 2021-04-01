@@ -27,5 +27,8 @@
 void
 audio_clip_editor_init (AudioClipEditor * self)
 {
+  self->schema_version =
+    AUDIO_CLIP_EDITOR_SCHEMA_VERSION;
+
   editor_settings_init (&self->editor_settings);
 }

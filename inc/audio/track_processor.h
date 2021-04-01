@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2019-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -41,19 +41,11 @@ typedef struct Track Track;
  * @{
  */
 
+#define TRACK_PROCESSOR_SCHEMA_VERSION 1
+
 #define TRACK_PROCESSOR_MAGIC 81213128
 #define IS_TRACK_PROCESSOR(tr) \
   ((tr) && (tr)->magic == TRACK_PROCESSOR_MAGIC)
-
-/**
- * Automatable MIDI signals.
- */
-typedef enum TrackProcessorMidiAutomatable
-{
-  MIDI_AUTOMATABLE_MOD_WHEEL,
-  MIDI_AUTOMATABLE_PITCH_BEND,
-  NUM_MIDI_AUTOMATABLES,
-} TrackProcessorMidiAutomatable;
 
 /**
  * A TrackProcessor is a processor that is used as
@@ -61,6 +53,8 @@ typedef enum TrackProcessorMidiAutomatable
  */
 typedef struct TrackProcessor
 {
+  int              schema_version;
+
   /**
    * L & R audio input ports, if audio.
    */
@@ -71,6 +65,14 @@ typedef struct TrackProcessor
 
   /** Input gain, if audio. */
   Port *           input_gain;
+
+  /**
+   * Output gain, if audio.
+   *
+   * This is applied after regions are processed to
+   * TrackProcessor.streo_out.
+   */
+  Port *           output_gain;
 
   /**
    * L & R audio output ports, if audio.
@@ -105,12 +107,33 @@ typedef struct TrackProcessor
    */
   Port *           piano_roll;
 
-  /** MIDI CC control ports, 16 channels. */
-  Port *           midi_automatables[NUM_MIDI_AUTOMATABLES * 16];
+  /* --- MIDI controls --- */
 
-  /** Last processed values, to avoid re-sending
-   * messages when the value is the same. */
-  float            last_automatable_vals[NUM_MIDI_AUTOMATABLES * 16];
+  /** MIDI CC control ports, 16 channels. */
+  Port *           midi_cc[128 * 16];
+
+  /** Pitch bend. */
+  Port *           pitch_bend[16];
+
+  /**
+   * Polyphonic key pressure (aftertouch).
+   *
+   * This message is most often sent by pressing
+   * down on the key after it "bottoms out".
+   */
+  Port *           poly_key_pressure[16];
+
+  /**
+   * Channel pressure (aftertouch).
+   *
+   * This message is different from polyphonic
+   * after-touch - sends the single greatest
+   * pressure value (of all the current depressed
+   * keys).
+   */
+  Port *           channel_pressure[16];
+
+  /* --- end MIDI controls --- */
 
   /**
    * Current dBFS after procesing each output port.
@@ -136,11 +159,16 @@ typedef struct TrackProcessor
 static const cyaml_schema_field_t
 track_processor_fields_schema[] =
 {
+  YAML_FIELD_INT (
+    TrackProcessor, schema_version),
   YAML_FIELD_MAPPING_PTR_OPTIONAL (
     TrackProcessor, mono,
     port_fields_schema),
   YAML_FIELD_MAPPING_PTR_OPTIONAL (
     TrackProcessor, input_gain,
+    port_fields_schema),
+  YAML_FIELD_MAPPING_PTR_OPTIONAL (
+    TrackProcessor, output_gain,
     port_fields_schema),
   YAML_FIELD_MAPPING_PTR_OPTIONAL (
     TrackProcessor, midi_in,
@@ -158,8 +186,17 @@ track_processor_fields_schema[] =
     TrackProcessor, stereo_out,
     stereo_ports_fields_schema),
   YAML_FIELD_FIXED_SIZE_PTR_ARRAY (
-    TrackProcessor, midi_automatables,
-    port_schema, NUM_MIDI_AUTOMATABLES * 16),
+    TrackProcessor, midi_cc,
+    port_schema, 128 * 16),
+  YAML_FIELD_FIXED_SIZE_PTR_ARRAY (
+    TrackProcessor, pitch_bend,
+    port_schema, 16),
+  YAML_FIELD_FIXED_SIZE_PTR_ARRAY (
+    TrackProcessor, poly_key_pressure,
+    port_schema, 16),
+  YAML_FIELD_FIXED_SIZE_PTR_ARRAY (
+    TrackProcessor, channel_pressure,
+    port_schema, 16),
   YAML_FIELD_INT (
     TrackProcessor, track_pos),
 
@@ -169,8 +206,7 @@ track_processor_fields_schema[] =
 static const cyaml_schema_value_t
 track_processor_schema =
 {
-  CYAML_VALUE_MAPPING (
-    CYAML_FLAG_POINTER,
+  YAML_VALUE_PTR (
     TrackProcessor, track_processor_fields_schema),
 };
 

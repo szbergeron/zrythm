@@ -164,7 +164,7 @@ if get_option ('tests')
     'audio/midi_event': { parallel: true },
     'audio/midi_mapping': { parallel: true },
     'audio/midi_note': { parallel: true },
-    'audio/midi_region': { parallel: true },
+    'audio/midi_region': { parallel: false },
     'audio/midi_track': { parallel: true },
     'audio/position': { parallel: true },
     'audio/port': { parallel: true },
@@ -270,7 +270,7 @@ if get_option ('tests')
     timeout = 180
     if suite.contains ('benchmark') or suite.contains ('integration') or suite.contains ('actions')
       is_parallel = false
-      timeout = 360
+      timeout = 420
     endif
 
     if fs.is_file (source)

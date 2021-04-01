@@ -45,6 +45,8 @@ typedef struct _ArrangerObjectWidget
  * @{
  */
 
+#define ARRANGER_OBJECT_SCHEMA_VERSION 1
+
 #define ARRANGER_OBJECT_MAGIC 347616554
 #define IS_ARRANGER_OBJECT(tr) \
   (((ArrangerObject *) tr)->magic == \
@@ -63,6 +65,14 @@ typedef enum ArrangerObjectResizeType
   ARRANGER_OBJECT_RESIZE_LOOP,
   ARRANGER_OBJECT_RESIZE_FADE,
   ARRANGER_OBJECT_RESIZE_STRETCH,
+
+  /**
+   * Used when we want to resize to contents
+   * when BPM changes.
+   *
+   * Only applies to audio.
+   */
+  ARRANGER_OBJECT_RESIZE_STRETCH_BPM_CHANGE,
 } ArrangerObjectResizeType;
 
 /**
@@ -158,6 +168,7 @@ typedef enum ArrangerObjectCloneFlag
  */
 typedef struct ArrangerObject
 {
+  int                schema_version;
   ArrangerObjectType type;
 
   /** Flags. */
@@ -327,6 +338,7 @@ typedef struct ArrangerObject
 static const cyaml_schema_field_t
   arranger_object_fields_schema[] =
 {
+  YAML_FIELD_INT (ArrangerObject, schema_version),
   YAML_FIELD_ENUM (
     ArrangerObject, type,
     arranger_object_type_strings),

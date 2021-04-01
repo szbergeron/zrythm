@@ -102,7 +102,7 @@ automation_region_print_automation (
       ap = self->aps[i];
       ap_obj = (ArrangerObject *) ap;
       g_message ("%d", i);
-      position_print_yaml (&ap_obj->pos);
+      position_print (&ap_obj->pos);
     }
 }
 
@@ -261,6 +261,7 @@ void
 automation_region_remove_ap (
   ZRegion *         self,
   AutomationPoint * ap,
+  bool              freeing_region,
   int               free)
 {
   g_return_if_fail (
@@ -281,10 +282,13 @@ automation_region_remove_ap (
   array_delete (
     self->aps, self->num_aps, ap);
 
-  for (int i = 0; i < self->num_aps; i++)
+  if (!freeing_region)
     {
-      automation_point_set_region_and_index (
-        self->aps[i], self, i);
+      for (int i = 0; i < self->num_aps; i++)
+        {
+          automation_point_set_region_and_index (
+            self->aps[i], self, i);
+        }
     }
 
   if (free)
@@ -357,7 +361,8 @@ automation_region_get_ap_around (
     region_get_automation_track (self);
   /* FIXME only check aps in this region */
   AutomationPoint * ap =
-    automation_track_get_ap_before_pos (at, &pos);
+    automation_track_get_ap_before_pos (
+      at, &pos, true);
   ArrangerObject * ap_obj =
     (ArrangerObject *) ap;
   if (ap &&
@@ -372,7 +377,7 @@ automation_region_get_ap_around (
       position_add_ticks (&pos, delta_ticks);
       ap =
         automation_track_get_ap_before_pos (
-          at, &pos);
+          at, &pos, true);
       ap_obj = (ArrangerObject *) ap;
       if (ap)
         {
@@ -411,9 +416,11 @@ automation_region_free_members (
   ZRegion * self)
 {
   int i;
-  for (i = 0; i < self->num_aps; i++)
-    automation_region_remove_ap (
-      self, self->aps[i], F_FREE);
+  for (i = self->num_aps - 1; i >= 0; i--)
+    {
+      automation_region_remove_ap (
+        self, self->aps[i], true, F_FREE);
+    }
 
   free (self->aps);
 }

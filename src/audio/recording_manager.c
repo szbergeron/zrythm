@@ -588,7 +588,7 @@ delete_automation_points (
     {
       AutomationPoint * ap = aps[i];
       automation_region_remove_ap (
-        region, ap, true);
+        region, ap, false, true);
     }
 
   /* create a new automation point at the pos with
@@ -610,7 +610,8 @@ delete_automation_points (
             region->last_recorded_ap->fvalue))
         {
           automation_region_remove_ap (
-            region, region->last_recorded_ap, true);
+            region, region->last_recorded_ap,
+            false, true);
         }
 
       ArrangerObject * r_obj =
@@ -651,7 +652,7 @@ create_automation_point (
     {
       AutomationPoint * ap = aps[i];
       automation_region_remove_ap (
-        region, ap, true);
+        region, ap, false, true);
     }
 
   ArrangerObject * r_obj =
@@ -876,7 +877,7 @@ handle_resume_event (
       /* get or start new region at resume pos */
       ZRegion * new_region =
         automation_track_get_region_before_pos (
-          at, &resume_pos);
+          at, &resume_pos, true);
       if (!new_region &&
           automation_track_should_be_recording (
             at, cur_time, false))
@@ -905,7 +906,7 @@ handle_resume_event (
             {
               automation_region_remove_ap (
                 new_region, new_region->aps[0],
-                true);
+                false, true);
             }
 
           /* create/replace ap at loop start */
@@ -1220,7 +1221,7 @@ handle_automation_event (
   /* get the recording region */
   ZRegion * region =
     automation_track_get_region_before_pos (
-      at, &start_pos);
+      at, &start_pos, true);
 #if 0
   position_print (&start_pos);
   position_print (&end_pos);
@@ -1237,7 +1238,7 @@ handle_automation_event (
 
   ZRegion * region_at_end =
     automation_track_get_region_before_pos (
-      at, &end_pos);
+      at, &end_pos, true);
   if (!region && automation_value_changed)
     {
       /* create region */

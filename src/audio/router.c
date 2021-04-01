@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2019-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -55,6 +55,7 @@
 #include "audio/port.h"
 #include "audio/router.h"
 #include "audio/stretcher.h"
+#include "audio/tempo_track.h"
 #include "audio/track.h"
 #include "audio/track_processor.h"
 #include "project.h"
@@ -117,8 +118,28 @@ router_start_cycle (
     self->max_route_playback_latency -
     AUDIO_ENGINE->remaining_latency_preroll;
   self->local_offset = local_offset;
+
+  /* process tempo track ports first */
+  if (self->graph->bpm_node)
+    {
+      graph_node_process (
+        self->graph->bpm_node, nsamples);
+    }
+  if (self->graph->beats_per_bar_node)
+    {
+      graph_node_process (
+        self->graph->beats_per_bar_node, nsamples);
+    }
+  if (self->graph->beat_unit_node)
+    {
+      graph_node_process (
+        self->graph->beat_unit_node, nsamples);
+    }
+
+  self->callback_in_progress = true;
   zix_sem_post (&self->graph->callback_start);
   zix_sem_wait (&self->graph->callback_done);
+  self->callback_in_progress = false;
 
   zix_sem_post (&self->graph_access);
 }

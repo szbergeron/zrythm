@@ -88,7 +88,23 @@ void
 arranger_object_init (
   ArrangerObject * self)
 {
+  self->schema_version =
+    ARRANGER_OBJECT_SCHEMA_VERSION;
   self->magic = ARRANGER_OBJECT_MAGIC;
+
+  position_init (&self->pos);
+  position_init (&self->end_pos);
+  position_init (&self->clip_start_pos);
+  position_init (&self->loop_start_pos);
+  position_init (&self->loop_end_pos);
+  position_init (&self->fade_in_pos);
+  position_init (&self->fade_out_pos);
+
+  curve_opts_init (&self->fade_in_opts);
+  curve_opts_init (&self->fade_out_opts);
+
+  self->region_id.schema_version =
+    REGION_IDENTIFIER_SCHEMA_VERSION;
 }
 
 /**
@@ -1084,6 +1100,13 @@ void
 arranger_object_update_frames (
   ArrangerObject * self)
 {
+  long frames_len_before = 0;
+  if (arranger_object_type_has_length (self->type))
+    {
+      frames_len_before =
+        arranger_object_get_length_in_frames (self);
+    }
+
   position_update_frames_from_ticks (&self->pos);
   if (arranger_object_type_has_length (self->type))
     {
@@ -1107,30 +1130,64 @@ arranger_object_update_frames (
         &self->fade_out_pos);
     }
 
-  int i;
   ZRegion * r;
   switch (self->type)
     {
     case TYPE (REGION):
       r = (ZRegion *) self;
-      for (i = 0; i < r->num_midi_notes; i++)
+
+      /* validate */
+      if (r->id.type == REGION_TYPE_AUDIO &&
+          !region_get_musical_mode (r))
+        {
+          long frames_len_after =
+            arranger_object_get_length_in_frames (
+              self);
+          if (frames_len_after !=
+                frames_len_before)
+            {
+              double ticks =
+                (frames_len_before -
+                frames_len_after) *
+                AUDIO_ENGINE->ticks_per_frame;
+              arranger_object_resize (
+                self, false,
+                ARRANGER_OBJECT_RESIZE_STRETCH_BPM_CHANGE,
+                ticks, false);
+            }
+          long tl_frames =
+            self->end_pos.frames - 1;
+          long local_frames;
+          AudioClip * clip;
+          local_frames =
+            region_timeline_frames_to_local (
+              r, tl_frames, F_NORMALIZE);
+          clip = audio_region_get_clip (r);
+          if (local_frames >= clip->num_frames)
+            {
+            }
+          g_return_if_fail (
+            local_frames < clip->num_frames);
+        }
+
+      for (int i = 0; i < r->num_midi_notes; i++)
         {
           arranger_object_update_frames (
             (ArrangerObject *) r->midi_notes[i]);
         }
-      for (i = 0; i < r->num_unended_notes; i++)
+      for (int i = 0; i < r->num_unended_notes; i++)
         {
           arranger_object_update_frames (
             (ArrangerObject *) r->unended_notes[i]);
         }
 
-      for (i = 0; i < r->num_aps; i++)
+      for (int i = 0; i < r->num_aps; i++)
         {
           arranger_object_update_frames (
             (ArrangerObject *) r->aps[i]);
         }
 
-      for (i = 0; i < r->num_chord_objects; i++)
+      for (int i = 0; i < r->num_chord_objects; i++)
         {
           arranger_object_update_frames (
             (ArrangerObject *) r->chord_objects[i]);
@@ -1315,8 +1372,10 @@ arranger_object_resize (
                 F_NO_VALIDATE);
             }
 
-          if (type ==
-                ARRANGER_OBJECT_RESIZE_STRETCH &&
+          if ((type ==
+                ARRANGER_OBJECT_RESIZE_STRETCH ||
+               type ==
+                 ARRANGER_OBJECT_RESIZE_STRETCH_BPM_CHANGE) &&
               self->type ==
                 ARRANGER_OBJECT_TYPE_REGION)
             {
@@ -1333,25 +1392,29 @@ arranger_object_resize (
                 arranger_object_get_length_in_ticks (
                   self);
 
-              /* FIXME this flag is not good,
-               * remove from this function and
-               * do it in the arranger */
-              if (during_ui_action)
+              if (type !=
+                    ARRANGER_OBJECT_RESIZE_STRETCH_BPM_CHANGE)
                 {
-                  region->stretch_ratio =
-                    new_length /
-                    region->before_length;
-                }
-              /* else if as part of an action */
-              else
-                {
-                  /* stretch contents */
-                  double stretch_ratio =
-                    new_length / before_length;
-                  g_message ("resizing with %f",
-                    stretch_ratio);
-                  region_stretch (
-                    region, stretch_ratio);
+                  /* FIXME this flag is not good,
+                   * remove from this function and
+                   * do it in the arranger */
+                  if (during_ui_action)
+                    {
+                      region->stretch_ratio =
+                        new_length /
+                        region->before_length;
+                    }
+                  /* else if as part of an action */
+                  else
+                    {
+                      /* stretch contents */
+                      double stretch_ratio =
+                        new_length / before_length;
+                      g_message ("resizing with %f",
+                        stretch_ratio);
+                      region_stretch (
+                        region, stretch_ratio);
+                    }
                 }
             }
         }
@@ -2162,6 +2225,7 @@ clone_region (
               arranger_object_clone (
                 (ArrangerObject *) src_co,
                 ARRANGER_OBJECT_CLONE_COPY_MAIN);
+            g_return_val_if_fail (dest_co, NULL);
 
             chord_region_add_chord_object (
               cr, dest_co, F_NO_PUBLISH_EVENTS);
@@ -2172,7 +2236,11 @@ clone_region (
       break;
     }
 
-  g_return_val_if_fail (new_region, NULL);
+  g_return_val_if_fail (
+    new_region &&
+    new_region->schema_version ==
+      REGION_SCHEMA_VERSION,
+    NULL);
 
   /* clone name */
   new_region->name = g_strdup (region->name);
@@ -2369,6 +2437,11 @@ arranger_object_clone (
   g_return_val_if_fail (new_obj, NULL);
 
   /* set positions */
+  g_warn_if_fail (
+    self->schema_version ==
+      ARRANGER_OBJECT_SCHEMA_VERSION &&
+    self->pos.schema_version ==
+      POSITION_SCHEMA_VERSION);
   new_obj->pos = self->pos;
   if (arranger_object_type_has_length (self->type))
     {
@@ -3181,7 +3254,7 @@ arranger_object_remove_from_project (
         g_return_if_fail (
           IS_REGION_AND_NONNULL (region));
         automation_region_remove_ap (
-          region, ap, F_FREE);
+          region, ap, false, F_FREE);
       }
       break;
     case ARRANGER_OBJECT_TYPE_CHORD_OBJECT:

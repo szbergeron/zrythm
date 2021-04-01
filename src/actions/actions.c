@@ -819,7 +819,8 @@ activate_save_as (GSimpleAction *action,
       filename =
         gtk_file_chooser_get_filename (chooser);
       project_save (
-        PROJECT, filename, 0, 1, F_NO_ASYNC);
+        PROJECT, filename, false, false,
+        F_NO_ASYNC);
       g_free (filename);
     }
 
@@ -1014,7 +1015,8 @@ activate_copy (
             clipboard->timeline_sel);
         }
       char * serialized =
-        clipboard_serialize (clipboard);
+        yaml_serialize (
+          clipboard, &clipboard_schema);
       g_return_if_fail (serialized);
       gtk_clipboard_set_text (
         DEFAULT_CLIPBOARD,
@@ -1038,7 +1040,8 @@ on_clipboard_received (
     return;
 
   Clipboard * clipboard =
-    clipboard_deserialize (text);
+    (Clipboard *)
+    yaml_deserialize (text, &clipboard_schema);
   if (!clipboard)
     {
       g_message (
