@@ -21,6 +21,8 @@
 #include "audio/audio_region.h"
 #include "audio/channel.h"
 #include "audio/chord_track.h"
+#include "audio/group_target_track.h"
+#include "audio/master_track.h"
 #include "audio/midi_file.h"
 #include "audio/router.h"
 #include "audio/tracklist.h"
@@ -75,6 +77,36 @@ tracklist_init_loaded (
         self->modulator_track = track;
 
       track_init_loaded (track, true);
+    }
+}
+
+/**
+ * Selects or deselects all tracks.
+ *
+ * @note When deselecting the last track will become
+ *   selected (there must always be >= 1 tracks
+ *   selected).
+ */
+void
+tracklist_select_all (
+  Tracklist * self,
+  bool        select,
+  bool        fire_events)
+{
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      Track * track = self->tracks[i];
+
+      track_select (
+        track, select, F_NOT_EXCLUSIVE,
+        fire_events);
+
+      if (!select && i == self->num_tracks - 1)
+        {
+          track_select (
+            track, F_SELECT, F_EXCLUSIVE,
+            fire_events);
+        }
     }
 }
 
@@ -190,6 +222,11 @@ swap_tracks (
 
   Track * src_track = self->tracks[src];
   Track * dest_track = self->tracks[dest];
+  g_return_if_fail (
+    IS_TRACK_AND_NONNULL (src_track) &&
+    IS_TRACK_AND_NONNULL (dest_track));
+  g_debug ("swapping tracks %s [%d] and %s [%d]...",
+    src_track->name, src, dest_track->name, dest);
 
   /* move src somewhere temporarily */
   self->tracks[src] = NULL;
@@ -207,6 +244,7 @@ swap_tracks (
   track_set_pos (src_track, dest);
 
   self->swapping_tracks = false;
+  g_debug ("tracks swapped");
 }
 
 /**
@@ -224,8 +262,9 @@ tracklist_insert_track (
   int         recalc_graph)
 {
   g_message (
-    "inserting %s at %d...",
-    track->name, pos);
+    "inserting %s at %d (has output %d)...",
+    track->name, pos,
+    track->channel && track->channel->has_output);
 
   /* set to -1 so other logic knows it is a new
    * track */
@@ -259,14 +298,20 @@ tracklist_insert_track (
 
   track_set_is_project (track, true);
 
-  /* this is needed again since "set_is_project"
-   * made some ports from non-project to project
-   * and they weren't considered before */
   track_set_pos (track, pos);
 
   if (track->channel)
     {
       channel_connect (track->channel);
+    }
+
+  /* if audio output route to master */
+  if (track->out_signal_type == TYPE_AUDIO &&
+      track->type != TRACK_TYPE_MASTER)
+    {
+      group_target_track_add_child (
+        P_MASTER_TRACK, pos, F_CONNECT,
+        F_NO_RECALC_GRAPH, F_NO_PUBLISH_EVENTS);
     }
 
   /* verify */
@@ -685,7 +730,7 @@ tracklist_remove_track (
   bool        publish_events,
   bool        recalc_graph)
 {
-  g_return_if_fail (self && IS_TRACK (track));
+  g_return_if_fail (IS_TRACK (track));
   g_message (
     "%s: removing %s - remove plugins %d - "
     "free track %d - pub events %d - "
@@ -708,13 +753,13 @@ tracklist_remove_track (
       self->tracks, self->num_tracks, track);
   g_warn_if_fail (track->pos == idx);
 
+  track_disconnect (
+    track, rm_pl, F_NO_RECALC_GRAPH);
+
   /* move track to the end */
   tracklist_move_track (
     self, track, TRACKLIST->num_tracks - 1,
     F_NO_PUBLISH_EVENTS, F_NO_RECALC_GRAPH);
-
-  track_disconnect (
-    track, rm_pl, F_NO_RECALC_GRAPH);
 
   tracklist_selections_remove_track (
     TRACKLIST_SELECTIONS, track, publish_events);
@@ -747,8 +792,8 @@ tracklist_remove_track (
 
   if (free_track)
     {
-      object_free_w_func_and_null (
-        track_free, track);
+      track_free (track);
+      track = NULL;
     }
 
   if (recalc_graph)
@@ -1198,7 +1243,8 @@ tracklist_mark_all_tracks_for_bounce (
     {
       Track * track = self->tracks[i];
       track_mark_for_bounce (
-        track, bounce, true, false);
+        track, bounce, F_MARK_REGIONS,
+        F_NO_MARK_CHILDREN, F_NO_MARK_PARENTS);
     }
 }
 
@@ -1225,6 +1271,8 @@ tracklist_free (
   for (int i = num_tracks - 1; i >= 0; i--)
     {
       Track * track = self->tracks[i];
+      g_return_if_fail (
+        IS_TRACK_AND_NONNULL (track));
       tracklist_remove_track (
         self, track, F_REMOVE_PL, F_FREE,
         F_NO_PUBLISH_EVENTS, F_NO_RECALC_GRAPH);

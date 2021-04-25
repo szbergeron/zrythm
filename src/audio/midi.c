@@ -302,6 +302,9 @@ void
 midi_panic_all (
   int queued)
 {
+  g_message (
+    "~ midi panic all (queued: %d) ~", queued);
+
   midi_events_panic (
     AUDIO_ENGINE->midi_editor_manual_press->
       midi_events, queued);
@@ -311,7 +314,7 @@ midi_panic_all (
     {
       track = TRACKLIST->tracks[i];
 
-      if (track_has_piano_roll (track) ||
+      if (track_type_has_piano_roll (track->type) ||
           track->type == TRACK_TYPE_CHORD)
         {
           midi_events_panic (

@@ -1006,6 +1006,8 @@ channel_connect (
 {
   Track * tr = channel_get_track (ch);
 
+  g_message ("connecting channel...");
+
   /* set default output */
   if (tr->type == TRACK_TYPE_MASTER)
     {
@@ -1019,12 +1021,6 @@ channel_connect (
         ch->stereo_out->r,
         MONITOR_FADER->stereo_in->r,
         1);
-    }
-  else if (tr->out_signal_type == TYPE_AUDIO)
-    {
-      group_target_track_add_child (
-        P_MASTER_TRACK, ch->track_pos, F_CONNECT,
-        F_NO_RECALC_GRAPH, F_NO_PUBLISH_EVENTS);
     }
 
   if (tr->out_signal_type ==
@@ -1066,8 +1062,17 @@ channel_connect (
       channel_expose_ports_to_backend (ch);
     }
 
+  /* connect sends */
+  for (int i = 0; i < STRIP_SIZE; i++)
+    {
+      ChannelSend * send = ch->sends[i];
+      channel_send_update_connections (send);
+    }
+
   /* connect the designated midi inputs */
   channel_reconnect_ext_input_ports (ch);
+
+  g_message ("done connecting channel");
 }
 
 Track *
@@ -1691,6 +1696,7 @@ channel_remove_plugin (
     /*}*/
 
   if (track->is_project &&
+      !track->disconnecting &&
       /* only verify if we are deleting the plugin.
        * if the plugin is moved to another slot
        * this check fails because the port
@@ -1876,13 +1882,14 @@ channel_add_plugin (
     }
 
   Plugin * prev_pl = NULL;
-  for (i =
-         (slot_type == PLUGIN_SLOT_INSTRUMENT ?
-            STRIP_SIZE - 1 : slot - 1); i >= 0; i--)
+  if (slot_type != PLUGIN_SLOT_INSTRUMENT)
     {
-      prev_pl = prev_plugins[i];
-      if (prev_pl)
-        break;
+      for (i = slot - 1; i >= 0; i--)
+        {
+          prev_pl = prev_plugins[i];
+          if (prev_pl)
+            break;
+        }
     }
   if (!prev_pl &&
       slot_type == PLUGIN_SLOT_INSERT)
@@ -1983,6 +1990,11 @@ channel_update_track_pos (
                 self->track_pos)
             {
               out_track->children[i] = pos;
+              g_debug (
+                "%s: setting output of track [%d] to "
+                "%s [%d]",
+                __func__, pos, out_track->name,
+                out_track->pos);
             }
         }
     }

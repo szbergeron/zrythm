@@ -683,6 +683,7 @@ track_set_muted (
   Track * self,
   bool    mute,
   bool    trigger_undo,
+  bool    auto_select,
   bool    fire_events)
 {
   g_return_if_fail (self->channel);
@@ -690,6 +691,11 @@ track_set_muted (
   g_message (
     "Setting track %s muted (%d)",
     self->name, mute);
+  if (auto_select)
+    {
+      track_select (
+        self, F_SELECT, F_EXCLUSIVE, fire_events);
+    }
   fader_set_muted (
     self->channel->fader, mute, trigger_undo,
     fire_events);
@@ -814,7 +820,7 @@ track_validate (
   g_return_val_if_fail (self, false);
 
   g_message (
-    "verifying %s identifiers...", self->name);
+    "validating track '%s'...", self->name);
 
   int track_pos = self->pos;
 
@@ -885,7 +891,7 @@ track_validate (
     }
   free (ports);
 
-  /* verify output is not itself */
+  /* verify output and sends */
   if (self->channel)
     {
       Channel * ch = self->channel;
@@ -894,12 +900,24 @@ track_validate (
       g_return_val_if_fail (
         out_track != self, false);
 
+      if (TRACK_CAN_BE_GROUP_TARGET (self))
+        {
+          group_target_track_validate (self);
+        }
+
       /* verify plugins */
       if (ch->instrument)
         {
           g_return_val_if_fail (
             plugin_validate (
               ch->instrument), false);
+        }
+
+      /* verify sends */
+      for (int i = 0; i < STRIP_SIZE; i++)
+        {
+          ChannelSend * send = ch->sends[i];
+          channel_send_validate (send);
         }
     }
 
@@ -1070,15 +1088,28 @@ track_multiply_heights (
 /**
  * Sets track soloed, updates UI and optionally
  * adds the action to the undo stack.
+ *
+ * @param auto_select Makes this track the only
+ *   selection in the tracklist. Useful when soloing
+ *   a single track.
+ * @param trigger_undo Create and perform an
+ *   undoable action.
+ * @param fire_events Fire UI events.
  */
 void
 track_set_soloed (
   Track * self,
   bool    solo,
   bool    trigger_undo,
+  bool    auto_select,
   bool    fire_events)
 {
   g_return_if_fail (self->channel);
+  if (auto_select)
+    {
+      track_select (
+        self, F_SELECT, F_EXCLUSIVE, fire_events);
+    }
   fader_set_soloed (
     self->channel->fader, solo, trigger_undo,
     fire_events);
@@ -1092,7 +1123,8 @@ track_write_to_midi_file (
   Track *     self,
   MIDI_FILE * mf)
 {
-  g_return_if_fail (track_has_piano_roll (self));
+  g_return_if_fail (
+    track_type_has_piano_roll (self->type));
 
   TrackLane * lane;
   for (int i = 0; i < self->num_lanes; i++)
@@ -1242,7 +1274,7 @@ track_generate_automation_tracks (
         }
     }
 
-  if (track_has_piano_roll (track))
+  if (track_type_has_piano_roll (track->type))
     {
       /* midi automatables */
       for (int i = 0; i < 16; i++)
@@ -1567,12 +1599,12 @@ track_remove_empty_last_lanes (
 /**
  * Returns if the Track should have a piano roll.
  */
-int
-track_has_piano_roll (
-  const Track * track)
+bool
+track_type_has_piano_roll (
+  const TrackType type)
 {
-  return track->type == TRACK_TYPE_MIDI ||
-    track->type == TRACK_TYPE_INSTRUMENT;
+  return type == TRACK_TYPE_MIDI ||
+    type == TRACK_TYPE_INSTRUMENT;
 }
 
 /**
@@ -1593,6 +1625,11 @@ track_update_children (
         child->out_signal_type ==
           self->in_signal_type);
       child->channel->output_pos = self->pos;
+      g_debug (
+        "%s: setting output of track %s [%d] to "
+        "%s [%d]",
+        __func__, child->name, child->pos, self->name,
+        self->pos);
     }
 }
 
@@ -1605,9 +1642,9 @@ track_set_pos (
   Track * self,
   int     pos)
 {
-  g_message (
-    "%s (%d) to %d",
-    self->name, self->pos, pos);
+  g_debug (
+    "%s: %s (%d) to %d",
+    __func__, self->name, self->pos, pos);
 
   int prev_pos = self->pos;
   self->pos = pos;
@@ -1700,7 +1737,8 @@ track_freeze (
     {
       ExportSettings settings;
       track_mark_for_bounce (
-        self, true, true, false);
+        self, F_BOUNCE, F_MARK_REGIONS,
+        F_NO_MARK_CHILDREN, F_NO_MARK_PARENTS);
       settings.mode = EXPORT_MODE_TRACKS;
       export_settings_set_bounce_defaults (
         &settings, NULL, self->name);
@@ -1881,6 +1919,8 @@ track_disconnect (
   g_message ("disconnecting %s (%d)...",
     self->name, self->pos);
 
+  self->disconnecting = true;
+
   /* if this is a group track and has children,
    * remove them */
   if (TRACK_CAN_BE_GROUP_TARGET (self))
@@ -1928,7 +1968,9 @@ track_disconnect (
         self->channel, remove_pl);
     }
 
-  g_message ("done");
+  self->disconnecting = false;
+
+  g_debug ("done");
 }
 
 /**
@@ -2406,9 +2448,9 @@ track_fill_events (
 
 #if 0
   g_message (
-    "TRACK %s STARTING from %ld, "
+    "%s: TRACK %s STARTING from %ld, "
     "local start frame %u, nframes %u",
-    track->name, g_start_frames,
+    __func__, track->name, g_start_frames,
     local_start_frame, nframes);
 #endif
 
@@ -2484,25 +2526,30 @@ track_fill_events (
                 local_start_frame + frames_processed;
 
               bool is_end_loop;
-              long cur_num_frames;
+              long cur_num_frames_till_next_r_loop_or_end;
               region_get_frames_till_next_loop_or_end (
                 r, cur_g_start_frame,
-                &cur_num_frames, &is_end_loop);
+                &cur_num_frames_till_next_r_loop_or_end,
+                &is_end_loop);
 
 #if 0
               g_message (
-                "cur num frames %ld, "
+                "%s: cur num frames till next r "
+                "loop or end %ld, "
                 "num_frames_to_process %ld, "
                 "cur local start frame %u",
-                cur_num_frames,
+                __func__, cur_num_frames_till_next_r_loop_or_end,
                 num_frames_to_process,
                 cur_local_start_frame);
 #endif
 
               /* whether we need a note off */
               bool need_note_off =
-                (cur_num_frames <
+                (cur_num_frames_till_next_r_loop_or_end <
                    num_frames_to_process) ||
+                (cur_num_frames_till_next_r_loop_or_end ==
+                   num_frames_to_process &&
+                 !is_end_loop) ||
                 /* region end */
                 (g_start_frames +
                    num_frames_to_process ==
@@ -2515,9 +2562,9 @@ track_fill_events (
 
               /* number of frames to process this
                * time */
-              cur_num_frames =
+              cur_num_frames_till_next_r_loop_or_end =
                 MIN (
-                  cur_num_frames,
+                  cur_num_frames_till_next_r_loop_or_end,
                   num_frames_to_process);
 
               if (midi_events)
@@ -2525,7 +2572,7 @@ track_fill_events (
                   midi_region_fill_midi_events (
                     r, cur_g_start_frame,
                     cur_local_start_frame,
-                    cur_num_frames, need_note_off,
+                    cur_num_frames_till_next_r_loop_or_end, need_note_off,
                     midi_events);
                 }
               else if (stereo_ports)
@@ -2533,12 +2580,12 @@ track_fill_events (
                   audio_region_fill_stereo_ports (
                     r, cur_g_start_frame,
                     cur_local_start_frame,
-                    cur_num_frames, stereo_ports);
+                    cur_num_frames_till_next_r_loop_or_end, stereo_ports);
                 }
 
-              frames_processed += cur_num_frames;
+              frames_processed += cur_num_frames_till_next_r_loop_or_end;
               num_frames_to_process -=
-                cur_num_frames;
+                cur_num_frames_till_next_r_loop_or_end;
             } /* end while frames left */
         }
     }
@@ -3045,13 +3092,16 @@ track_get_plugin_at_slot (
  * @param mark_children Whether to mark all
  *   children tracks as well. Used when exporting
  *   stems on the specific track stem only.
+ * @param mark_parents Whether to mark all parent
+ *   tracks as well.
  */
 void
 track_mark_for_bounce (
   Track * self,
   bool    bounce,
   bool    mark_regions,
-  bool    mark_children)
+  bool    mark_children,
+  bool    mark_parents)
 {
   if (!track_type_has_channel (self->type))
     {
@@ -3063,6 +3113,10 @@ track_mark_for_bounce (
     self->name, bounce, mark_regions);
 
   self->bounce = bounce;
+
+  /* bounce directly to master if not marking
+   * parents*/
+  self->bounce_to_master = !mark_parents;
 
   if (mark_regions)
     {
@@ -3088,10 +3142,11 @@ track_mark_for_bounce (
     track_type_has_channel (self->type));
   Track * direct_out =
     channel_get_output_track (self->channel);
-  if (direct_out)
+  if (direct_out && mark_parents)
     {
       track_mark_for_bounce (
-        direct_out, bounce, mark_regions, false);
+        direct_out, bounce, F_NO_MARK_REGIONS,
+        F_NO_MARK_CHILDREN, F_MARK_PARENTS);
     }
 
   if (mark_children)
@@ -3102,7 +3157,8 @@ track_mark_for_bounce (
             TRACKLIST->tracks[self->children[i]];
 
           track_mark_for_bounce (
-            child, bounce, mark_regions, true);
+            child, bounce, mark_regions,
+            F_MARK_CHILDREN, F_NO_MARK_PARENTS);
         }
     }
 }

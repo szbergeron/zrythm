@@ -442,6 +442,13 @@ typedef struct Track
   bool                 bounce;
 
   /**
+   * Whether to temporarily route the output to
+   * master (e.g., when bouncing the track on its
+   * own without its parents).
+   */
+  bool                 bounce_to_master;
+
+  /**
    * Tracks that are routed to this track, if
    * group track.
    *
@@ -462,6 +469,9 @@ typedef struct Track
   /** Whether this is a project track (as opposed
    * to a clone used in actions). */
   bool                 is_project;
+
+  /** Whether currently disconnecting. */
+  bool                 disconnecting;
 } Track;
 
 static const cyaml_schema_field_t
@@ -604,6 +614,7 @@ track_set_muted (
   Track * track,
   bool    mute,
   bool    trigger_undo,
+  bool    auto_select,
   bool    fire_events);
 
 NONNULL
@@ -674,16 +685,25 @@ track_set_recording (
   bool      recording,
   bool      fire_events);
 
+
 /**
- * Sets track soloed and optionally adds the action
- * to the undo stack.
+ * Sets track soloed, updates UI and optionally
+ * adds the action to the undo stack.
+ *
+ * @param auto_select Makes this track the only
+ *   selection in the tracklist. Useful when soloing
+ *   a single track.
+ * @param trigger_undo Create and perform an
+ *   undoable action.
+ * @param fire_events Fire UI events.
  */
 NONNULL
 void
 track_set_soloed (
-  Track * track,
+  Track * self,
   bool    solo,
   bool    trigger_undo,
+  bool    auto_select,
   bool    fire_events);
 
 /**
@@ -976,9 +996,9 @@ track_set_pos (
 /**
  * Returns if the Track should have a piano roll.
  */
-int
-track_has_piano_roll (
-  const Track * track);
+bool
+track_type_has_piano_roll (
+  const TrackType type);
 
 /**
  * Returns if the Track should have an inputs
@@ -1219,13 +1239,16 @@ track_get_plugin_at_slot (
  * @param mark_children Whether to mark all
  *   children tracks as well. Used when exporting
  *   stems on the specific track stem only.
+ * @param mark_parents Whether to mark all parent
+ *   tracks as well.
  */
 void
 track_mark_for_bounce (
   Track * self,
   bool    bounce,
   bool    mark_regions,
-  bool    mark_children);
+  bool    mark_children,
+  bool    mark_parents);
 
 /**
  * Appends all channel ports and optionally

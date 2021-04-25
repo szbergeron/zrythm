@@ -84,8 +84,9 @@ language_mappings = {
   'pl': 'Polski',
   'pt': 'Português',
   'pt_BR': 'Português BR',
-  'ru': 'русский',
+  'ru': 'Русский',
   'sv': 'Svenska',
+  'uk': 'Українська',
   'zh_CN': '简体中文',
   'zh_TW': '繁體中文',
   }
@@ -305,6 +306,9 @@ ext_lv2_plugins = {
   'calf_compressor': [
     'Calf Compressor',
     'http://calf.sourceforge.net/plugins/Compressor'],
+  'mverb': [
+    'MVerb',
+    'http://distrho.sf.net/plugins/MVerb'],
   }
 have_ext_lv2_plugins = {}
 ext_lv2_plugin_bundles = {}
@@ -543,51 +547,60 @@ if get_option ('profiling')
   endif
 endif
 
+common_cflags = []
+
+extra_optimizations_cflags = []
+if host_machine.cpu() == 'x86_64'
+  extra_optimizations_cflags += [
+    '-ffast-math',
+    '-fstrength-reduce',
+    '-DPIC',
+    '-fdata-sections',
+    '-ffunction-sections',
+    '-freciprocal-math',
+    '-fsingle-precision-constant',
+    '-mtune=generic',
+    '-msse',
+    '-msse2',
+    '-mfpmath=sse',
+    #'-fvisibility=hidden',
+    ]
+endif
+if get_option ('extra_debug_info') or get_option ('debug') or get_option ('buildtype').contains ('debug')
+  extra_optimizations_cflags += [
+    '-fno-omit-frame-pointer',
+    ]
+else
+  # note: this may break the backtrace
+  extra_optimizations_cflags += [
+    '-fomit-frame-pointer',
+    ]
+endif
+extra_optimizations_cflags = cc.get_supported_arguments (extra_optimizations_cflags)
+
 if get_option ('extra_optimizations')
-  if host_machine.cpu() == 'x86_64'
-    test_cflags += [
-      '-ffast-math',
-      '-fstrength-reduce',
-      '-DPIC',
-      '-fdata-sections',
-      '-ffunction-sections',
-      '-freciprocal-math',
-      '-fsingle-precision-constant',
-      '-mtune=generic',
-      '-msse',
-      '-msse2',
-      '-mfpmath=sse',
-      #'-fvisibility=hidden',
-      ]
-  endif
-  if get_option ('extra_debug_info') or get_option ('debug') or get_option ('buildtype').contains ('debug')
-    test_cflags += [
-      '-fno-omit-frame-pointer',
-      ]
-  else
-    # note: this may break the backtrace
-    test_cflags += [
-      '-fomit-frame-pointer',
-      ]
-  endif
+  common_cflags += extra_optimizations_cflags
 endif
 
+extra_extra_optimizations_cflags = [
+  '-fallow-store-data-races',
+  '-ffinite-math-only',
+  '-fno-signed-zeros',
+  '-fno-trapping-math',
+  '-ffp-contract=fast',
+  '-fmodulo-sched',
+  ]
+extra_extra_optimizations_cflags = cc.get_supported_arguments (extra_extra_optimizations_cflags)
+
 if get_option ('extra_extra_optimizations')
-  test_cflags += [
-    '-fallow-store-data-races',
-    '-ffinite-math-only',
-    '-fno-signed-zeros',
-    '-fno-trapping-math',
-    '-ffp-contract=fast',
-    '-fmodulo-sched',
-    ]
+  common_cflags += extra_extra_optimizations_cflags
 endif
 
 if get_option ('extra_debug_info')
   test_cflags += '-ggdb3'
 endif
 
-common_cflags = cc.get_supported_arguments (
+common_cflags += cc.get_supported_arguments (
   test_cflags)
 
 if os_freebsd
@@ -941,14 +954,15 @@ if have_carla
   # install discovery & bridge for 32-bit vst's on
   # windows
   if os_windows
+    carla_bins_dir_32bit = get_option ('carla_binaries_dir_32bit')
     install_data (
       find_program (
-        carla_bins_dir /
+        carla_bins_dir_32bit /
           'carla-discovery-win32.exe').full_path(),
       install_dir: zrythm_libdir / 'carla')
     install_data (
       find_program (
-        carla_bins_dir /
+        carla_bins_dir_32bit /
           'carla-bridge-win32.exe').full_path(),
       install_dir: zrythm_libdir / 'carla')
   endif

@@ -245,11 +245,11 @@ timeline_arranger_on_quick_bounce_clicked (
     }
 
   ExportSettings settings;
-  timeline_selections_mark_for_bounce (
-    TL_SELECTIONS);
   settings.mode = EXPORT_MODE_REGIONS;
   export_settings_set_bounce_defaults (
     &settings, NULL, r->name);
+  timeline_selections_mark_for_bounce (
+    TL_SELECTIONS, settings.bounce_with_parents);
 
   /* start exporting in a new thread */
   GThread * thread =
@@ -480,11 +480,9 @@ timeline_arranger_widget_create_scale (
 
   /* create a new scale */
   MusicalScale * descr =
-    musical_scale_new (
-      SCALE_AEOLIAN, NOTE_A);
+    musical_scale_new (SCALE_AEOLIAN, NOTE_A);
   ScaleObject * scale =
-    scale_object_new (
-      descr, 1);
+    scale_object_new (descr);
   ArrangerObject * scale_obj =
     (ArrangerObject *) scale;
 
@@ -1510,7 +1508,7 @@ on_dnd_data_received (
   if (target ==
         GET_ATOM (TARGET_ENTRY_CHORD_DESCR) &&
       self->is_highlighted && track &&
-      track_has_piano_roll (track))
+      track_type_has_piano_roll (track->type))
     {
       ChordDescriptor * descr = NULL;
       const guchar * my_data =
@@ -1629,7 +1627,7 @@ on_dnd_motion (
              GET_ATOM (TARGET_ENTRY_CHORD_DESCR))
     {
       if (at || !track ||
-          !track_has_piano_roll (track))
+          !track_type_has_piano_roll (track->type))
         {
           /* nothing to do */
           return false;

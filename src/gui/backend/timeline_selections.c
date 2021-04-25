@@ -85,9 +85,7 @@ timeline_selections_new_for_range (
       if (clone_objs) \
         { \
           _obj =  \
-          arranger_object_clone ( \
-            _obj, \
-            ARRANGER_OBJECT_CLONE_COPY_MAIN); \
+          arranger_object_clone (_obj); \
         } \
       arranger_selections_add_object ( \
         (ArrangerSelections *) self, _obj); \
@@ -564,9 +562,14 @@ timeline_selections_paste_to_pos (
 }
 #endif
 
+/**
+ * @param with_parents Also mark all the track's
+ *   parents recursively.
+ */
 void
 timeline_selections_mark_for_bounce (
-  TimelineSelections * ts)
+  TimelineSelections * ts,
+  bool                 with_parents)
 {
   engine_reset_bounce_mode (AUDIO_ENGINE);
 
@@ -578,7 +581,9 @@ timeline_selections_mark_for_bounce (
           (ArrangerObject *) r);
       g_return_if_fail (track);
 
-      track->bounce = 1;
+      track_mark_for_bounce (
+        track, F_BOUNCE, F_NO_MARK_REGIONS,
+        F_MARK_CHILDREN, with_parents);
       r->bounce = 1;
     }
 }

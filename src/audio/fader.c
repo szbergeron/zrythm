@@ -24,6 +24,7 @@
 #include "audio/control_room.h"
 #include "audio/engine.h"
 #include "audio/fader.h"
+#include "audio/group_target_track.h"
 #include "audio/master_track.h"
 #include "audio/midi_event.h"
 #include "audio/track.h"
@@ -210,11 +211,13 @@ fader_new (
       /* stereo in */
       self->stereo_in =
         stereo_ports_new_generic (
-        1, name,
-        type == FADER_TYPE_AUDIO_CHANNEL ?
-          PORT_OWNER_TYPE_FADER :
-          PORT_OWNER_TYPE_MONITOR_FADER,
-        self);
+        1, name, PORT_OWNER_TYPE_FADER, self);
+
+      /* set proper owner */
+      port_set_owner_fader (
+        self->stereo_in->l, self);
+      port_set_owner_fader (
+        self->stereo_in->r, self);
 
       if (type == FADER_TYPE_AUDIO_CHANNEL)
         {
@@ -235,11 +238,13 @@ fader_new (
       /* stereo out */
       self->stereo_out =
         stereo_ports_new_generic (
-        0, name,
-        type == FADER_TYPE_AUDIO_CHANNEL ?
-          PORT_OWNER_TYPE_FADER :
-          PORT_OWNER_TYPE_MONITOR_FADER,
-        self);
+        0, name, PORT_OWNER_TYPE_FADER, self);
+
+      /* set proper owner */
+      port_set_owner_fader (
+        self->stereo_out->l, self);
+      port_set_owner_fader (
+        self->stereo_out->r, self);
     }
 
   if (type == FADER_TYPE_MIDI_CHANNEL)
@@ -349,7 +354,8 @@ fader_get_soloed (
 /**
  * Returns whether the fader is not soloed on its
  * own but its direct out (or its direct out's direct
- * out, etc.) is soloed.
+ * out, etc.) or its child (or its children's child,
+ * etc.) is soloed.
  */
 bool
 fader_get_implied_soloed (
@@ -366,6 +372,7 @@ fader_get_implied_soloed (
   Track * track = fader_get_track (self);
   g_return_val_if_fail (track, false);
 
+  /* check parents */
   Track * out_track = track;
   do
     {
@@ -385,6 +392,23 @@ fader_get_implied_soloed (
           out_track = NULL;
         }
     } while (out_track);
+
+  /* check children */
+  if (TRACK_CAN_BE_GROUP_TARGET (track))
+    {
+      for (int i = 0; i < track->num_children; i++)
+        {
+          Track * child_track =
+            TRACKLIST->tracks[track->children[i]];
+          if (child_track &&
+              (track_get_soloed (child_track) ||
+               track_get_implied_soloed (
+                 child_track)))
+            {
+              return true;
+            }
+        }
+    }
 
   return false;
 }
@@ -815,6 +839,18 @@ fader_process (
          /*track->out_signal_type == TYPE_AUDIO &&*/
          track->type != TRACK_TYPE_MASTER &&
          !track->bounce);
+
+#if 0
+      if (ZRYTHM_TESTING && track &&
+          (self->type == FADER_TYPE_AUDIO_CHANNEL ||
+           self->type == FADER_TYPE_MIDI_CHANNEL))
+        {
+          g_message ("%s soloed %d implied soloed %d effectively muted %d",
+            track->name, fader_get_soloed (self),
+            fader_get_implied_soloed (self),
+            effectively_muted);
+        }
+#endif
     }
 
   if (self->type == FADER_TYPE_AUDIO_CHANNEL ||
@@ -846,13 +882,6 @@ fader_process (
                 self->stereo_out, clip,
                 g_start_frames, start_frame,
                 nframes);
-              /*for (long i = 0; i < clip->num_frames; i++)*/
-                /*{*/
-                  /*if (clip->frames[i] > 0.001f)*/
-                    /*{*/
-                      /*g_warning ("filled from clip");*/
-                    /*}*/
-                /*}*/
             }
         }
       else /* not prefader */
@@ -905,6 +934,20 @@ fader_process (
                 }
             }
 
+#if 0
+          if (self->type ==
+                FADER_TYPE_AUDIO_CHANNEL &&
+              track)
+            {
+              if (fabsf (
+                    self->stereo_out->l->buf[0]) >
+                      0.0001f)
+                {
+                  g_message ("%s have sound", track->name);
+                }
+            }
+#endif
+
           /* if not master, no more processing
            * needed, return */
           if (self->type ==
@@ -912,7 +955,7 @@ fader_process (
               track &&
               track->type != TRACK_TYPE_MASTER)
             {
-                return;
+              return;
             }
 
           /* hard limit the output */

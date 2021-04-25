@@ -146,24 +146,6 @@ typedef enum ArrangerObjectPositionType
 } ArrangerObjectPositionType;
 
 /**
- * Flag do indicate how to clone the object.
- */
-typedef enum ArrangerObjectCloneFlag
-{
-  /** Create a new ZRegion to be added to a
-   * Track as a main Region. */
-  ARRANGER_OBJECT_CLONE_COPY_MAIN,
-
-  /** Create a new ZRegion that will not be used
-   * as a main Region. */
-  ARRANGER_OBJECT_CLONE_COPY,
-
-  /** Create a link copy that references the
-   * parent (only used for regions). */
-  ARRANGER_OBJECT_CLONE_COPY_LINK,
-} ArrangerObjectCloneFlag;
-
-/**
  * Base struct for arranger objects.
  */
 typedef struct ArrangerObject
@@ -463,6 +445,7 @@ arranger_object_set_magic (
  * If the object is part of a ZRegion, returns it,
  * otherwise returns NULL.
  */
+HOT
 ZRegion *
 arranger_object_get_region (
   ArrangerObject * self);
@@ -861,6 +844,7 @@ arranger_object_add_ticks_to_children (
 /**
  * Returns the Track this ArrangerObject is in.
  */
+HOT
 Track *
 arranger_object_get_track (
   ArrangerObject * self);
@@ -909,15 +893,11 @@ arranger_object_find (
   ArrangerObject * obj);
 
 /**
- * Clone the ArrangerObject.
- *
- * Creates a new region and either links to the
- * original or copies every field.
+ * Clones the ArrangerObject.
  */
 ArrangerObject *
 arranger_object_clone (
-  ArrangerObject *        self,
-  ArrangerObjectCloneFlag clone_flag);
+  ArrangerObject * self);
 
 /**
  * Splits the given object at the given Position.

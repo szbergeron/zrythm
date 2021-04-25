@@ -232,6 +232,9 @@
 #define F_ASCENDING 1
 #define F_NOT_ASCENDING 0
 
+#define F_DESCENDING 1
+#define F_NOT_DESCENDING 0
+
 #define F_MOVING_PLUGIN 1
 #define F_NOT_MOVING_PLUGIN 0
 
@@ -261,5 +264,32 @@
 
 #define F_FOLLOW_SYMLINKS 1
 #define F_NO_FOLLOW_SYMLINKS 0
+
+#define F_BOUNCE 1
+#define F_NO_BOUNCE 0
+
+#define F_MARK_REGIONS 1
+#define F_NO_MARK_REGIONS 0
+
+#define F_MARK_CHILDREN 1
+#define F_NO_MARK_CHILDREN 0
+
+#define F_MARK_PARENTS 1
+#define F_NO_MARK_PARENTS 0
+
+#define F_MARK_MASTER 1
+#define F_NO_MARK_MASTER 0
+
+#define F_LOCKED 1
+#define F_NOT_LOCKED 0
+
+#define F_SOLO 1
+#define F_NO_SOLO 0
+
+#define F_AUTO_SELECT 1
+#define F_NO_AUTO_SELECT 0
+
+#define F_TOGGLE 1
+#define F_NO_TOGGLE 0
 
 #endif

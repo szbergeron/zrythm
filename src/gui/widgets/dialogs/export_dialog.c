@@ -756,6 +756,7 @@ on_format_changed (
 
   SET_UNSENSITIVE (export_genre);
   SET_UNSENSITIVE (export_artist);
+  SET_UNSENSITIVE (export_title);
   SET_UNSENSITIVE (bit_depth);
   SET_UNSENSITIVE (dither);
 
@@ -767,11 +768,13 @@ on_format_changed (
     case AUDIO_FORMAT_OGG_OPUS:
       SET_SENSITIVE (export_genre);
       SET_SENSITIVE (export_artist);
+      SET_SENSITIVE (export_title);
       SET_SENSITIVE (dither);
       break;
     default:
       SET_SENSITIVE (export_genre);
       SET_SENSITIVE (export_artist);
+      SET_SENSITIVE (export_title);
       SET_SENSITIVE (bit_depth);
       SET_SENSITIVE (dither);
       break;
@@ -836,6 +839,7 @@ init_export_info (
   ExportSettings *     info,
   Track *              track)
 {
+  memset (info, 0, sizeof (ExportSettings));
   info->format =
     gtk_combo_box_get_active (self->format);
   g_settings_set_enum (
@@ -852,11 +856,16 @@ init_export_info (
   info->artist =
     g_strdup (
       gtk_entry_get_text (self->export_artist));
+  info->title =
+    g_strdup (
+      gtk_entry_get_text (self->export_title));
   info->genre =
     g_strdup (
       gtk_entry_get_text (self->export_genre));
   g_settings_set_string (
     S_EXPORT, "artist", info->artist);
+  g_settings_set_string (
+    S_EXPORT, "title", info->title);
   g_settings_set_string (
     S_EXPORT, "genre", info->genre);
 
@@ -883,6 +892,8 @@ info->time_range = TIME_RANGE_##x
 
   info->file_uri =
     get_export_filename (self, true, track);
+
+  info->bounce_with_parents = true;
 
   info->mode = EXPORT_MODE_TRACKS;
   info->has_error = false;
@@ -925,7 +936,8 @@ on_export_clicked (
 
           Track * track = tracks[i];
           track_mark_for_bounce (
-            track, true, true, true);
+            track, F_BOUNCE, F_MARK_REGIONS,
+            F_MARK_CHILDREN, F_MARK_PARENTS);
 
           ExportSettings info;
           init_export_info (self, &info, track);
@@ -977,7 +989,8 @@ on_export_clicked (
         {
           Track * track = tracks[i];
           track_mark_for_bounce (
-            track, true, true, false);
+            track, F_BOUNCE, F_MARK_REGIONS,
+            F_NO_MARK_CHILDREN, F_MARK_PARENTS);
         }
 
       g_message ("exporting %s", info.file_uri);
@@ -1473,6 +1486,7 @@ export_dialog_widget_class_init (
   BIND_CHILD (cancel_button);
   BIND_CHILD (export_button);
   BIND_CHILD (export_artist);
+  BIND_CHILD (export_title);
   BIND_CHILD (export_genre);
   BIND_CHILD (filename_pattern);
   BIND_CHILD (bit_depth);
@@ -1501,6 +1515,9 @@ export_dialog_widget_init (
   gtk_entry_set_text (
     GTK_ENTRY (self->export_artist),
     g_settings_get_string (S_EXPORT, "artist"));
+  gtk_entry_set_text (
+    GTK_ENTRY (self->export_title),
+    g_settings_get_string (S_EXPORT, "title"));
   gtk_entry_set_text (
     GTK_ENTRY (self->export_genre),
     g_settings_get_string (S_EXPORT, "genre"));

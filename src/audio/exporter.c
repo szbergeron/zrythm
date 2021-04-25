@@ -265,6 +265,8 @@ export_audio (
   sf_set_string (
     sndfile, SF_STR_ARTIST, info->artist);
   sf_set_string (
+    sndfile, SF_STR_TITLE, info->title);
+  sf_set_string (
     sndfile, SF_STR_GENRE, info->genre);
 
   Position prev_playhead_pos;
@@ -326,6 +328,9 @@ export_audio (
   AUDIO_ENGINE->bounce_mode =
     info->mode == EXPORT_MODE_FULL ?
       BOUNCE_OFF : BOUNCE_ON;
+  AUDIO_ENGINE->bounce_step = info->bounce_step;
+  AUDIO_ENGINE->bounce_with_parents =
+    info->bounce_with_parents;
 
   /* set jack freewheeling mode and temporarily
    * disable transport link */
@@ -460,6 +465,8 @@ export_audio (
           covered_ticks, total_ticks, 1.0));
     }
 
+  /* TODO silence output */
+
   info->progress = 1.0;
 
   /* set jack freewheeling mode and transport type */
@@ -475,6 +482,7 @@ export_audio (
 #endif
 
   AUDIO_ENGINE->bounce_mode = BOUNCE_OFF;
+  AUDIO_ENGINE->bounce_with_parents = false;
   transport_move_playhead (
     TRANSPORT, &prev_playhead_pos, F_PANIC,
     F_NO_SET_CUE_POINT,
@@ -538,7 +546,8 @@ export_midi (
         {
           track = TRACKLIST->tracks[i];
 
-          if (track_has_piano_roll (track))
+          if (track_type_has_piano_roll (
+                track->type))
             {
               /* write track to midi file */
               track_write_to_midi_file (
@@ -591,6 +600,7 @@ export_settings_set_bounce_defaults (
 {
   self->format = AUDIO_FORMAT_WAV;
   self->artist = g_strdup ("");
+  self->title = g_strdup ("");
   self->genre = g_strdup ("");
   self->depth = BIT_DEPTH_16;
   self->time_range = TIME_RANGE_CUSTOM;
@@ -630,6 +640,16 @@ export_settings_set_bounce_defaults (
       100 :
       g_settings_get_int (
         S_UI, "bounce-tail"));
+
+  self->bounce_step =
+    ZRYTHM_TESTING ?
+      BOUNCE_STEP_POST_FADER :
+      g_settings_get_enum (S_UI, "bounce-step");
+  self->bounce_with_parents =
+    ZRYTHM_TESTING ?
+      true :
+      g_settings_get_boolean (
+        S_UI, "bounce-with-parents");
 
   if (filepath)
     {
@@ -672,6 +692,7 @@ export_settings_free_members (
   ExportSettings * self)
 {
   g_free_and_null (self->artist);
+  g_free_and_null (self->title);
   g_free_and_null (self->genre);
   g_free_and_null (self->file_uri);
 }

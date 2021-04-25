@@ -54,6 +54,7 @@
 #include "utils/io.h"
 #include "utils/mem.h"
 #include "utils/objects.h"
+#include "utils/sort.h"
 #include "utils/string.h"
 #include "utils/ui.h"
 #include "zrythm.h"
@@ -79,9 +80,10 @@
  * If category not already set in the categories, add it.
  */
 static void
-add_category (
+add_category_and_author (
   PluginManager * self,
-  char *          category)
+  char *          category,
+  char *          author)
 {
   g_return_if_fail (category);
   if (!string_is_ascii (category))
@@ -90,36 +92,47 @@ add_category (
         "Ignoring non-ASCII plugin category "
         "name...");
     }
+  bool ignore_category = false;
   for (int i = 0;
        i < self->num_plugin_categories; i++)
     {
       char * cat = self->plugin_categories[i];
       if (!strcmp (cat, category))
         {
-          return;
+          ignore_category = true;
+          break;
         }
     }
-  g_message ("%s: %s", __func__, category);
-  self->plugin_categories[
-    self->num_plugin_categories++] =
-      g_strdup (category);
-}
+  if (!ignore_category)
+    {
+      g_message ("%s: %s", __func__, category);
+      self->plugin_categories[
+        self->num_plugin_categories++] =
+          g_strdup (category);
+    }
 
-static int
-sort_category_func (
-  const void *a, const void *b)
-{
-  char * pa =
-    *(char * const *) a;
-  char * pb =
-    *(char * const *) b;
-  int r = strcasecmp(pa, pb);
-  if (r)
-    return r;
+  if (author)
+    {
+      bool ignore_author = false;
+      for (int i = 0;
+           i < self->num_plugin_authors; i++)
+        {
+          char * cat = self->plugin_authors[i];
+          if (!strcmp (cat, author))
+            {
+              ignore_author = true;
+              break;
+            }
+        }
 
-  /* if equal ignoring case, use opposite of strcmp() result to get
-   * lower before upper */
-  return -strcmp(pa, pb); /* aka: return strcmp(b, a); */
+      if (!ignore_author)
+        {
+          g_message ("%s: %s", __func__, author);
+          self->plugin_authors[
+            self->num_plugin_authors++] =
+              g_strdup (author);
+        }
+    }
 }
 
 static int sort_plugin_func (
@@ -915,8 +928,9 @@ scan_carla_descriptors_from_paths (
                   array_append (
                     self->plugin_descriptors,
                     self->num_plugins, clone);
-                  add_category (
-                    self, clone->category_str);
+                  add_category_and_author (
+                    self, clone->category_str,
+                    clone->author);
                 }
             }
           /* if no cached descriptors found */
@@ -944,8 +958,7 @@ scan_carla_descriptors_from_paths (
                         calloc (
                           2, sizeof (PluginDescriptor *));
                       descriptors[0] =
-                        calloc (
-                          1, sizeof (PluginDescriptor));
+                        plugin_descriptor_new ();
                       PluginDescriptor * descr =
                         descriptors[0];
                       descr->path = g_strdup (plugin_path);
@@ -1014,8 +1027,10 @@ scan_carla_descriptors_from_paths (
                             self->plugin_descriptors,
                             self->num_plugins,
                             descriptor);
-                          add_category (
-                            self, descriptor->category_str);
+                          add_category_and_author (
+                            self,
+                            descriptor->category_str,
+                            descriptor->author);
                           g_message (
                             "Caching %s %s",
                             protocol_str,
@@ -1165,8 +1180,9 @@ plugin_manager_scan_plugins (
                 self->num_plugins++] =
                   plugin_descriptor_clone (
                     found_descr);;
-              add_category (
-                self, found_descr->category_str);
+              add_category_and_author (
+                self, found_descr->category_str,
+                found_descr->author);
 
               plugin_descriptor_free (
                 descriptor);
@@ -1179,8 +1195,9 @@ plugin_manager_scan_plugins (
               /* add descriptor to list */
               self->plugin_descriptors[
                 self->num_plugins++] = descriptor;
-              add_category (
-                self, descriptor->category_str);
+              add_category_and_author (
+                self, descriptor->category_str,
+                descriptor->author);
 
               /* add descriptor to cached */
               cached_plugin_descriptors_add (
@@ -1283,8 +1300,9 @@ plugin_manager_scan_plugins (
               self->plugin_descriptors[
                 self->num_plugins++] =
                   descriptor;
-              add_category (
-                self, descriptor->category_str);
+              add_category_and_author (
+                self, descriptor->category_str,
+                descriptor->author);
             }
 
           count++;
@@ -1323,15 +1341,21 @@ plugin_manager_scan_plugins (
 #endif // HAVE_CARLA
 
   /* sort alphabetically */
-  qsort (self->plugin_descriptors,
-         (size_t) self->num_plugins,
-         sizeof (Plugin *),
-         sort_plugin_func);
-  qsort (self->plugin_categories,
-         (size_t)
-           self->num_plugin_categories,
-         sizeof (char *),
-         sort_category_func);
+  qsort (
+    self->plugin_descriptors,
+    (size_t) self->num_plugins,
+    sizeof (Plugin *),
+    sort_plugin_func);
+  qsort (
+    self->plugin_categories,
+    (size_t) self->num_plugin_categories,
+    sizeof (char *),
+    sort_alphabetical_func);
+  qsort (
+    self->plugin_authors,
+    (size_t) self->num_plugin_authors,
+    sizeof (char *),
+    sort_alphabetical_func);
 
   g_message (
     "%s: %d Plugins scanned.",

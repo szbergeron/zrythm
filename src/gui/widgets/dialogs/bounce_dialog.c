@@ -21,6 +21,7 @@
 #include "audio/exporter.h"
 #include "gui/backend/timeline_selections.h"
 #include "gui/backend/tracklist_selections.h"
+#include "gui/widgets/bounce_step_selector.h"
 #include "gui/widgets/dialogs/bounce_dialog.h"
 #include "gui/widgets/dialogs/export_progress_dialog.h"
 #include "project.h"
@@ -52,21 +53,13 @@ on_bounce_clicked (
   BounceDialogWidget * self)
 {
   ExportSettings settings;
-  Position start_pos;
-  position_init (&start_pos);
+
   switch (self->type)
     {
     case BOUNCE_DIALOG_REGIONS:
-      timeline_selections_mark_for_bounce (
-        TL_SELECTIONS);
       settings.mode = EXPORT_MODE_REGIONS;
-      arranger_selections_get_start_pos (
-        (ArrangerSelections *) TL_SELECTIONS,
-        &start_pos, F_GLOBAL);
       break;
     case BOUNCE_DIALOG_TRACKS:
-      tracklist_selections_mark_for_bounce (
-        TRACKLIST_SELECTIONS);
       settings.mode = EXPORT_MODE_TRACKS;
       break;
     }
@@ -79,6 +72,28 @@ on_bounce_clicked (
     {
       export_settings_set_bounce_defaults (
         &settings, NULL, self->bounce_name);
+    }
+
+  Position start_pos;
+  position_init (&start_pos);
+  switch (self->type)
+    {
+    case BOUNCE_DIALOG_REGIONS:
+      timeline_selections_mark_for_bounce (
+        TL_SELECTIONS,
+        settings.bounce_with_parents);
+      settings.mode = EXPORT_MODE_REGIONS;
+      arranger_selections_get_start_pos (
+        (ArrangerSelections *) TL_SELECTIONS,
+        &start_pos, F_GLOBAL);
+      break;
+    case BOUNCE_DIALOG_TRACKS:
+      tracklist_selections_mark_for_bounce (
+        TRACKLIST_SELECTIONS,
+        settings.bounce_with_parents,
+        F_NO_MARK_MASTER);
+      settings.mode = EXPORT_MODE_TRACKS;
+      break;
     }
 
   /* start exporting in a new thread */
@@ -121,6 +136,18 @@ on_tail_value_changed (
     gtk_spin_button_get_value_as_int (spin));
 }
 
+static void
+on_bounce_with_parents_toggled (
+  GtkToggleButton *    btn,
+  BounceDialogWidget * self)
+{
+  bool toggled = gtk_toggle_button_get_active (btn);
+  gtk_widget_set_visible (
+    GTK_WIDGET (self->bounce_step_box), !toggled);
+  g_settings_set_boolean (
+    S_UI, "bounce-with-parents", toggled);
+}
+
 /**
  * Creates a bounce dialog.
  */
@@ -136,9 +163,19 @@ bounce_dialog_widget_new (
   /* TODO free when destroying */
   self->bounce_name = g_strdup (bounce_name);
 
+  self->bounce_step_selector =
+    bounce_step_selector_widget_new ();
+  gtk_container_add (
+    GTK_CONTAINER (self->bounce_step_box),
+    GTK_WIDGET (self->bounce_step_selector));
+
   g_signal_connect (
     G_OBJECT (self->tail_spin), "value-changed",
     G_CALLBACK (on_tail_value_changed), self);
+  g_signal_connect (
+    G_OBJECT (self->bounce_with_parents), "toggled",
+    G_CALLBACK (on_bounce_with_parents_toggled),
+    self);
 
   return self;
 }
@@ -157,7 +194,8 @@ bounce_dialog_widget_class_init (
 
   BIND_CHILD (cancel_btn);
   BIND_CHILD (bounce_btn);
-  BIND_CHILD (with_effects_check);
+  BIND_CHILD (bounce_with_parents);
+  BIND_CHILD (bounce_step_box);
   BIND_CHILD (tail_spin);
 
   gtk_widget_class_bind_template_callback (
@@ -171,14 +209,18 @@ bounce_dialog_widget_init (BounceDialogWidget * self)
 {
   gtk_widget_init_template (GTK_WIDGET (self));
 
-  gtk_toggle_button_set_active (
-    GTK_TOGGLE_BUTTON (self->with_effects_check),
-    g_settings_get_boolean (
-      S_UI, "bounce-with-effects"));
   gtk_spin_button_set_value (
     self->tail_spin,
     (double)
-    g_settings_get_int (
-      S_UI, "bounce-tail"));
-}
+    g_settings_get_int (S_UI, "bounce-tail"));
 
+  bool bounce_with_parents =
+    g_settings_get_boolean (
+      S_UI, "bounce-with-parents");
+  gtk_toggle_button_set_active (
+    GTK_TOGGLE_BUTTON (self->bounce_with_parents),
+    bounce_with_parents);
+  gtk_widget_set_visible (
+    GTK_WIDGET (self->bounce_step_box),
+    !bounce_with_parents);
+}

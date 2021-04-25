@@ -520,8 +520,23 @@ arranger_object_is_position_valid (
       break;
     case ARRANGER_OBJECT_POSITION_TYPE_LOOP_END:
       {
-        /* TODO */
-        is_valid = 1;
+        is_valid = true;
+        if (self->type ==
+              ARRANGER_OBJECT_TYPE_REGION)
+          {
+            ZRegion * r = (ZRegion *) self;
+            if (r->id.type == REGION_TYPE_AUDIO)
+              {
+                AudioClip * clip =
+                  audio_region_get_clip (r);
+                Position clip_frames;
+                position_from_frames (
+                  &clip_frames, clip->num_frames);
+                is_valid =
+                  position_is_before_or_equal (
+                    pos, &clip_frames);
+              }
+          }
       }
       break;
     case ARRANGER_OBJECT_POSITION_TYPE_CLIP_START:
@@ -607,6 +622,17 @@ arranger_object_copy_identifier (
         ChordObject * srcap =
           (ChordObject *) src;
         destap->index = srcap->index;
+        destap->chord_index =
+          srcap->chord_index;
+      }
+      break;
+    case TYPE (SCALE_OBJECT):
+      {
+        ScaleObject * dest_so =
+          (ScaleObject *) dest;
+        ScaleObject * src_so =
+          (ScaleObject *) src;
+        dest_so->index = src_so->index;
       }
       break;
     case TYPE (MARKER):
@@ -752,13 +778,31 @@ arranger_object_print (
     }
 
   char * extra_info = NULL;
-  if (self->type == ARRANGER_OBJECT_TYPE_REGION)
+  switch (self->type)
     {
-      ZRegion * region = (ZRegion *) self;
-      extra_info =
-        g_strdup_printf (
-          " track: %d - idx: %d",
-          region->id.track_pos, region->id.idx);
+    case ARRANGER_OBJECT_TYPE_REGION:
+      {
+        ZRegion * region = (ZRegion *) self;
+        extra_info =
+          g_strdup_printf (
+            " track: %d - lane: %d - idx: %d - "
+            "link group: %d",
+            region->id.track_pos,
+            region->id.lane_pos,
+            region->id.idx,
+            region->id.link_group);
+      }
+      break;
+    case ARRANGER_OBJECT_TYPE_SCALE_OBJECT:
+      {
+        ScaleObject * so = (ScaleObject *) self;
+        extra_info =
+          g_strdup_printf (
+            " index: %d", so->index);
+      }
+      break;
+    default:
+      break;
     }
 
   g_message (
@@ -1971,28 +2015,26 @@ find_chord_object (
   g_return_val_if_fail (
     r && r->num_chord_objects > clone->index, NULL);
 
-  return
-    (ArrangerObject *)
+  ChordObject * prj_co =
     r->chord_objects[clone->index];
+  g_return_val_if_fail (
+    chord_object_is_equal (prj_co, clone), NULL);
+
+  return (ArrangerObject *) prj_co;
 }
 
 static ArrangerObject *
 find_scale_object (
   ScaleObject * clone)
 {
-  for (int i = 0;
-       i < P_CHORD_TRACK->num_scales; i++)
-    {
-      if (scale_object_is_equal (
-            P_CHORD_TRACK->scales[i],
-            clone))
-        {
-          return
-            (ArrangerObject *)
-            P_CHORD_TRACK->scales[i];
-        }
-    }
-  return NULL;
+  g_return_val_if_fail (
+    clone->index < P_CHORD_TRACK->num_scales, NULL);
+  ScaleObject * prj_co =
+    P_CHORD_TRACK->scales[clone->index];
+  g_return_val_if_fail (
+    scale_object_is_equal (prj_co, clone), NULL);
+
+  return (ArrangerObject *) prj_co;
 }
 
 static ArrangerObject *
@@ -2095,8 +2137,7 @@ arranger_object_find (
 
 static ArrangerObject *
 clone_region (
-  ZRegion *               region,
-  ArrangerObjectCloneFlag flag)
+  ZRegion *               region)
 {
   int i, j;
 
@@ -2130,8 +2171,7 @@ clone_region (
               (MidiNote *)
               arranger_object_clone (
                 (ArrangerObject *)
-                mr_orig->midi_notes[i],
-                ARRANGER_OBJECT_CLONE_COPY_MAIN);
+                mr_orig->midi_notes[i]);
 
             midi_region_add_midi_note (
               mr, mn, F_NO_PUBLISH_EVENTS);
@@ -2223,8 +2263,7 @@ clone_region (
             dest_co =
               (ChordObject *)
               arranger_object_clone (
-                (ArrangerObject *) src_co,
-                ARRANGER_OBJECT_CLONE_COPY_MAIN);
+                (ArrangerObject *) src_co);
             g_return_val_if_fail (dest_co, NULL);
 
             chord_region_add_chord_object (
@@ -2283,8 +2322,7 @@ arranger_object_get_name (
 
 static ArrangerObject *
 clone_midi_note (
-  MidiNote *              src,
-  ArrangerObjectCloneFlag flag)
+  MidiNote *              src)
 {
   ArrangerObject * src_obj =
     (ArrangerObject *) src;
@@ -2303,8 +2341,7 @@ clone_midi_note (
 
 static ArrangerObject *
 clone_chord_object (
-  ChordObject *           src,
-  ArrangerObjectCloneFlag flag)
+  ChordObject *           src)
 {
   ArrangerObject * src_obj =
     (ArrangerObject *) src;
@@ -2318,25 +2355,20 @@ clone_chord_object (
 
 static ArrangerObject *
 clone_scale_object (
-  ScaleObject *           src,
-  ArrangerObjectCloneFlag flag)
+  ScaleObject * src)
 {
-  int is_main = 0;
-  if (flag == ARRANGER_OBJECT_CLONE_COPY_MAIN)
-    is_main = 1;
-
   MusicalScale * musical_scale =
     musical_scale_clone (src->scale);
   ScaleObject * scale =
-    scale_object_new (musical_scale, is_main);
+    scale_object_new (musical_scale);
+  scale->index = src->index;
 
   return (ArrangerObject *) scale;
 }
 
 static ArrangerObject *
 clone_marker (
-  Marker *                src,
-  ArrangerObjectCloneFlag flag)
+  Marker *                src)
 {
   Marker * marker = marker_new (src->name);
   marker->index = src->index;
@@ -2347,8 +2379,7 @@ clone_marker (
 
 static ArrangerObject *
 clone_automation_point (
-  AutomationPoint *       src,
-  ArrangerObjectCloneFlag flag)
+  AutomationPoint *       src)
 {
   if (ZRYTHM_TESTING)
     {
@@ -2376,15 +2407,11 @@ clone_automation_point (
 }
 
 /**
- * Clone the ArrangerObject.
- *
- * Creates a new object and either links to the
- * original or copies every field.
+ * Clones the ArrangerObject.
  */
 ArrangerObject *
 arranger_object_clone (
-  ArrangerObject *        self,
-  ArrangerObjectCloneFlag flag)
+  ArrangerObject * self)
 {
   g_return_val_if_fail (self, NULL);
 
@@ -2393,31 +2420,31 @@ arranger_object_clone (
     {
     case TYPE (REGION):
       new_obj =
-        clone_region ((ZRegion *) self, flag);
+        clone_region ((ZRegion *) self);
       break;
     case TYPE (MIDI_NOTE):
       new_obj =
-        clone_midi_note ((MidiNote *) self, flag);
+        clone_midi_note ((MidiNote *) self);
       break;
     case TYPE (CHORD_OBJECT):
       new_obj =
         clone_chord_object (
-          (ChordObject *) self, flag);
+          (ChordObject *) self);
       break;
     case TYPE (SCALE_OBJECT):
       new_obj =
         clone_scale_object (
-          (ScaleObject *) self, flag);
+          (ScaleObject *) self);
       break;
     case TYPE (AUTOMATION_POINT):
       new_obj =
         clone_automation_point (
-          (AutomationPoint *) self, flag);
+          (AutomationPoint *) self);
       break;
     case TYPE (MARKER):
       new_obj =
         clone_marker (
-          (Marker *) self, flag);
+          (Marker *) self);
       break;
     case TYPE (VELOCITY):
       {
@@ -2508,12 +2535,8 @@ arranger_object_split (
   g_return_if_fail (IS_ARRANGER_OBJECT (self));
 
   /* create the new objects */
-  *r1 =
-    arranger_object_clone (
-      self, ARRANGER_OBJECT_CLONE_COPY_MAIN);
-  *r2 =
-    arranger_object_clone (
-      self, ARRANGER_OBJECT_CLONE_COPY_MAIN);
+  *r1 = arranger_object_clone (self);
+  *r2 = arranger_object_clone (self);
 
   g_debug ("splitting objects...");
 
@@ -2724,9 +2747,7 @@ arranger_object_unsplit (
     }
 
   /* create the new object */
-  *obj =
-    arranger_object_clone (
-      r1, ARRANGER_OBJECT_CLONE_COPY_MAIN);
+  *obj = arranger_object_clone (r1);
 
   /* set the end pos to the end pos of r2 and
    * fade out */
@@ -2896,8 +2917,7 @@ arranger_object_set_name_with_action (
     }
 
   ArrangerObject * clone_obj =
-    arranger_object_clone (
-      self, ARRANGER_OBJECT_CLONE_COPY_MAIN);
+    arranger_object_clone (self);
   g_return_if_fail (
     IS_ARRANGER_OBJECT_AND_NONNULL (clone_obj));
 
@@ -2993,6 +3013,9 @@ arranger_object_add_to_project (
   ArrangerObject * obj,
   bool             fire_events)
 {
+  g_message ("adding object to project:");
+  arranger_object_print (obj);
+
   /* find the region (if owned by region) */
   ZRegion * region = NULL;
   if (arranger_object_owned_by_region (obj))
@@ -3086,8 +3109,7 @@ arranger_object_add_to_project (
           default:
             track_add_region (
               track, r, NULL, r->id.lane_pos,
-              F_GEN_NAME,
-              fire_events);
+              F_GEN_NAME, fire_events);
             break;
           }
 
@@ -3101,6 +3123,9 @@ arranger_object_add_to_project (
       g_warn_if_reached ();
       break;
     }
+
+  g_message ("after adding:");
+  arranger_object_print (obj);
 }
 
 /**
@@ -3148,8 +3173,9 @@ arranger_object_insert_to_project (
         /* add it to the region */
         g_return_if_fail (
           IS_REGION_AND_NONNULL (region));
-        chord_region_add_chord_object (
-          region, chord, F_NO_PUBLISH_EVENTS);
+        chord_region_insert_chord_object (
+          region, chord, chord->index,
+          F_NO_PUBLISH_EVENTS);
       }
       break;
     case ARRANGER_OBJECT_TYPE_MIDI_NOTE:
@@ -3170,8 +3196,8 @@ arranger_object_insert_to_project (
           (ScaleObject *) obj;
 
         /* add it to the track */
-        chord_track_add_scale (
-          P_CHORD_TRACK, scale);
+        chord_track_insert_scale (
+          P_CHORD_TRACK, scale, scale->index);
       }
       break;
     case ARRANGER_OBJECT_TYPE_MARKER:
@@ -3180,8 +3206,8 @@ arranger_object_insert_to_project (
           (Marker *) obj;
 
         /* add it to the track */
-        marker_track_add_marker (
-          P_MARKER_TRACK, marker);
+        marker_track_insert_marker (
+          P_MARKER_TRACK, marker, marker->index);
       }
       break;
     case ARRANGER_OBJECT_TYPE_REGION:
@@ -3243,28 +3269,30 @@ arranger_object_remove_from_project (
   /*event_manager_remove_events_for_obj (*/
     /*EVENT_MANAGER, obj);*/
 
+  ZRegion * region = NULL;
+  if (arranger_object_owned_by_region (obj))
+    {
+      region =
+        arranger_object_get_region (obj);
+      g_return_if_fail (
+        IS_REGION_AND_NONNULL (region));
+    }
+
   switch (obj->type)
     {
     case ARRANGER_OBJECT_TYPE_AUTOMATION_POINT:
       {
         AutomationPoint * ap =
           (AutomationPoint *) obj;
-        ZRegion * region =
-          arranger_object_get_region (obj);
-        g_return_if_fail (
-          IS_REGION_AND_NONNULL (region));
         automation_region_remove_ap (
           region, ap, false, F_FREE);
       }
       break;
     case ARRANGER_OBJECT_TYPE_CHORD_OBJECT:
       {
-        ChordObject * chord =
-          (ChordObject *) obj;
-        ZRegion * region =
-          arranger_object_get_region (obj);
-        g_return_if_fail (
-          IS_REGION_AND_NONNULL (region));
+        ChordObject * chord = (ChordObject *) obj;
+      g_return_if_fail (
+        IS_REGION_AND_NONNULL (region));
         chord_region_remove_chord_object (
           region, chord, F_FREE,
           F_NO_PUBLISH_EVENTS);
@@ -3287,8 +3315,7 @@ arranger_object_remove_from_project (
         ScaleObject * scale =
           (ScaleObject *) obj;
         chord_track_remove_scale (
-          P_CHORD_TRACK, scale,
-          F_FREE);
+          P_CHORD_TRACK, scale, F_FREE);
       }
       break;
     case ARRANGER_OBJECT_TYPE_MARKER:
@@ -3301,10 +3328,7 @@ arranger_object_remove_from_project (
       break;
     case ARRANGER_OBJECT_TYPE_MIDI_NOTE:
       {
-        MidiNote * mn =
-          (MidiNote *) obj;
-        ZRegion * region =
-          arranger_object_get_region (obj);
+        MidiNote * mn = (MidiNote *) obj;
         midi_region_remove_midi_note (
           region, mn, F_FREE,
           F_NO_PUBLISH_EVENTS);
@@ -3312,6 +3336,11 @@ arranger_object_remove_from_project (
       break;
     default:
       break;
+    }
+
+  if (region)
+    {
+      region_update_link_group (region);
     }
 }
 

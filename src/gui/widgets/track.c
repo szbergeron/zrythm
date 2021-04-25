@@ -22,6 +22,7 @@
 #include "audio/audio_group_track.h"
 #include "audio/control_port.h"
 #include "audio/exporter.h"
+#include "audio/marker_track.h"
 #include "audio/master_track.h"
 #include "audio/instrument_track.h"
 #include "audio/track.h"
@@ -1606,11 +1607,13 @@ on_quick_bounce_clicked (
   Track *       track)
 {
   ExportSettings settings;
-  tracklist_selections_mark_for_bounce (
-    TRACKLIST_SELECTIONS);
   settings.mode = EXPORT_MODE_TRACKS;
   export_settings_set_bounce_defaults (
     &settings, NULL, track->name);
+  tracklist_selections_mark_for_bounce (
+    TRACKLIST_SELECTIONS,
+    settings.bounce_with_parents,
+    F_NO_MARK_MASTER);
 
   /* start exporting in a new thread */
   GThread * thread =
@@ -1634,12 +1637,13 @@ on_quick_bounce_clicked (
 
   if (!settings.has_error && !settings.cancelled)
     {
-      /* create audio track with bounced
-       * material */
-      Position init_pos;
-      position_init (&init_pos);
+      /* create audio track with bounced material */
+      Marker * m =
+        marker_track_get_start_marker (
+          P_MARKER_TRACK);
+      ArrangerObject * m_obj = (ArrangerObject *) m;
       exporter_create_audio_track_after_bounce (
-        &settings, &init_pos);
+        &settings, &m_obj->pos);
     }
 
   export_settings_free_members (&settings);
@@ -1674,6 +1678,14 @@ show_context_menu (
     GTK_MENU_SHELL (menu), \
     GTK_WIDGET (menuitem));
 
+#define ADD_SEPARATOR \
+  menuitem = \
+    GTK_MENU_ITEM ( \
+      gtk_separator_menu_item_new ()); \
+  gtk_widget_set_visible ( \
+    GTK_WIDGET (menuitem), true); \
+  APPEND (menuitem)
+
   int num_selected =
     TRACKLIST_SELECTIONS->num_tracks;
 
@@ -1695,7 +1707,7 @@ show_context_menu (
               g_strdup (_("_Delete Tracks"));
           menuitem =
             z_gtk_create_menu_item (
-              str, "edit-delete", false,
+              str, "edit-delete", F_NO_TOGGLE,
               "win.delete-selected-tracks");
           g_free (str);
           APPEND (menuitem);
@@ -1709,7 +1721,7 @@ show_context_menu (
               g_strdup (_("_Duplicate Tracks"));
           menuitem =
             z_gtk_create_menu_item (
-              str, "edit-copy", false,
+              str, "edit-copy", F_NO_TOGGLE,
               "win.duplicate-selected-tracks");
           g_free (str);
           APPEND (menuitem);
@@ -1721,7 +1733,7 @@ show_context_menu (
           menuitem =
             z_gtk_create_menu_item (
               _("Add Region"), "list-add",
-              false, "win.add-region");
+              F_NO_TOGGLE, "win.add-region");
           APPEND (menuitem);
         }
 
@@ -1730,7 +1742,7 @@ show_context_menu (
           num_selected == 1 ?
             _("Hide Track") :
             _("Hide Tracks"),
-          "view-hidden", false,
+          "view-hidden", F_NO_TOGGLE,
           "win.hide-selected-tracks");
       APPEND (menuitem);
 
@@ -1739,19 +1751,18 @@ show_context_menu (
           num_selected == 1 ?
             _("Pin/Unpin Track") :
             _("Pin/Unpin Tracks"),
-          "window-pin", false,
+          "window-pin", F_NO_TOGGLE,
           "win.pin-selected-tracks");
       APPEND (menuitem);
     }
 
   if (track->out_signal_type == TYPE_AUDIO)
     {
+      ADD_SEPARATOR;
       menuitem =
-        GTK_MENU_ITEM (
-          gtk_menu_item_new_with_label (
-            _("Quick bounce")));
-      gtk_widget_set_visible (
-        GTK_WIDGET (menuitem), 1);
+        z_gtk_create_menu_item (
+          _("Quick bounce"), "file-music-line",
+          F_NO_TOGGLE, NULL);
       APPEND (menuitem);
       g_signal_connect (
         menuitem, "activate",
@@ -1759,11 +1770,9 @@ show_context_menu (
         track);
 
       menuitem =
-        GTK_MENU_ITEM (
-          gtk_menu_item_new_with_label (
-            _("Bounce...")));
-      gtk_widget_set_visible (
-        GTK_WIDGET (menuitem), 1);
+        z_gtk_create_menu_item (
+          _("Bounce..."), "document-export",
+          F_NO_TOGGLE, NULL);
       APPEND (menuitem);
       g_signal_connect (
         menuitem, "activate",
@@ -1771,13 +1780,65 @@ show_context_menu (
         track);
     }
 
-  /* add midi channel selectors */
-  if (track_has_piano_roll (track))
+  /* add solo/mute */
+  if (track_type_has_channel (track->type))
     {
+      ADD_SEPARATOR;
+
+      if (tracklist_selections_contains_soloed_track (
+            TRACKLIST_SELECTIONS, F_NO_SOLO))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Solo"), ICON_NAME_SOLO, F_NO_TOGGLE,
+              "win.solo-selected-tracks");
+          APPEND (menuitem);
+        }
+      if (tracklist_selections_contains_soloed_track (
+            TRACKLIST_SELECTIONS, F_SOLO))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Unsolo"), "unsolo", F_NO_TOGGLE,
+              "win.unsolo-selected-tracks");
+          APPEND (menuitem);
+        }
+
+      if (tracklist_selections_contains_muted_track (
+            TRACKLIST_SELECTIONS, F_NO_MUTE))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Mute"), ICON_NAME_MUTE, F_NO_TOGGLE,
+              "win.mute-selected-tracks");
+          APPEND (menuitem);
+        }
+      if (tracklist_selections_contains_muted_track (
+            TRACKLIST_SELECTIONS, F_MUTE))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Unmute"), "unmute", F_NO_TOGGLE,
+              "win.unmute-selected-tracks");
+          APPEND (menuitem);
+        }
+    }
+
+  ADD_SEPARATOR;
+  menuitem =
+    z_gtk_create_menu_item (
+      _("Change color..."), "color-fill",
+      F_NO_TOGGLE, "win.change-track-color");
+  APPEND (menuitem);
+
+  /* add midi channel selectors */
+  if (track_type_has_piano_roll (track->type))
+    {
+      ADD_SEPARATOR;
       menuitem =
-        GTK_MENU_ITEM (
-          gtk_menu_item_new_with_label (
-            _("Track MIDI Ch")));
+        z_gtk_create_menu_item (
+          _("Track MIDI Ch"), "signal-midi",
+          F_NO_TOGGLE, NULL);
 
       GtkMenu * submenu =
         GTK_MENU (gtk_menu_new ());
@@ -1918,6 +1979,7 @@ show_context_menu (
 
 
 #undef APPEND
+#undef ADD_SEPARATOR
 
   gtk_menu_attach_to_widget (
     GTK_MENU (menu),
@@ -2081,14 +2143,16 @@ multipress_released (
               track_set_soloed (
                 track,
                 !track_get_soloed (track),
-                true, true);
+                F_TRIGGER_UNDO, F_AUTO_SELECT,
+                F_PUBLISH_EVENTS);
             }
           else if (CB_ICON_IS (MUTE))
             {
               track_set_muted (
                 track,
                 !track_get_muted (track),
-                true, true);
+                F_TRIGGER_UNDO, F_AUTO_SELECT,
+                F_PUBLISH_EVENTS);
             }
           else if (CB_ICON_IS (SHOW_TRACK_LANES))
             {

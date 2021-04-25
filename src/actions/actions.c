@@ -58,6 +58,7 @@
 #include "gui/widgets/clip_editor_inner.h"
 #include "gui/widgets/dialogs/create_project_dialog.h"
 #include "gui/widgets/dialogs/about_dialog.h"
+#include "gui/widgets/dialogs/object_color_chooser_dialog.h"
 #include "gui/widgets/dialogs/string_entry_dialog.h"
 #include "gui/widgets/event_viewer.h"
 #include "gui/widgets/dialogs/export_dialog.h"
@@ -1175,12 +1176,17 @@ activate_clear_selection (
   if (sel)
     {
       arranger_selections_clear (
-        sel, F_NO_FREE, F_NO_PUBLISH_EVENTS);
+        sel, F_NO_FREE, F_PUBLISH_EVENTS);
+    }
+  else if (PROJECT->last_selection ==
+             SELECTION_TYPE_TRACKLIST)
+    {
+      tracklist_select_all (
+        TRACKLIST, F_NO_SELECT, F_PUBLISH_EVENTS);
     }
   else
     {
-      g_debug (
-        "No arranger focused, doing nothing");
+      g_debug ("%s: doing nothing", __func__);
     }
 }
 
@@ -1198,10 +1204,15 @@ activate_select_all (
       arranger_selections_select_all (
         sel, F_PUBLISH_EVENTS);
     }
+  else if (PROJECT->last_selection ==
+             SELECTION_TYPE_TRACKLIST)
+    {
+      tracklist_select_all (
+        TRACKLIST, F_SELECT, F_PUBLISH_EVENTS);
+    }
   else
     {
-      g_debug (
-        "No arranger focused, doing nothing");
+      g_debug ("%s: doing nothing", __func__);
     }
 }
 
@@ -1496,6 +1507,19 @@ activate_duplicate_selected_tracks (
 }
 
 void
+activate_change_track_color (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  ObjectColorChooserDialogWidget * color_chooser =
+    object_color_chooser_dialog_widget_new_for_tracklist_selections (
+      TRACKLIST_SELECTIONS);
+  object_color_chooser_dialog_widget_run (
+    color_chooser);
+}
+
+void
 activate_goto_prev_marker (
   GSimpleAction *action,
   GVariant      *variant,
@@ -1598,6 +1622,74 @@ activate_pin_selected_tracks (
         tracklist_selections_action_new_pin (
           TRACKLIST_SELECTIONS);
     }
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_solo_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_solo (
+      TRACKLIST_SELECTIONS, F_SOLO);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_unsolo_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_solo (
+      TRACKLIST_SELECTIONS, F_NO_SOLO);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_mute_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_mute (
+      TRACKLIST_SELECTIONS, F_MUTE);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_unmute_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_mute (
+      TRACKLIST_SELECTIONS, F_NO_MUTE);
   undo_manager_perform (UNDO_MANAGER, ua);
 }
 

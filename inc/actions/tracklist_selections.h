@@ -149,6 +149,10 @@ typedef struct TracklistSelectionsAction
   int                   num_src_sends;
   size_t                src_sends_size;
 
+  /** Direct out tracks of the original tracks */
+  int *                 out_tracks;
+  int                   num_out_tracks;
+
   EditTracksActionType  edit_type;
 
   /**
@@ -179,7 +183,7 @@ typedef struct TracklistSelectionsAction
    *
    * Also used for bool.
    */
-  int                   ival_before;
+  int *                 ival_before;
   int                   ival_after;
 
   /* -------------- end DELTAS ------------- */
@@ -187,6 +191,7 @@ typedef struct TracklistSelectionsAction
   /** Track position to direct output to. */
   int                   new_direct_out_pos;
 
+  GdkRGBA *             colors_before;
   GdkRGBA               new_color;
 
   char *                new_txt;
@@ -245,17 +250,29 @@ static const cyaml_schema_field_t
     TracklistSelectionsAction, tls_after,
     tracklist_selections_fields_schema),
   YAML_FIELD_DYN_PTR_ARRAY_VAR_COUNT_OPT (
+    TracklistSelectionsAction, out_tracks,
+    int_schema),
+  YAML_FIELD_DYN_PTR_ARRAY_VAR_COUNT_OPT (
     TracklistSelectionsAction, src_sends,
     channel_send_schema),
   YAML_FIELD_ENUM (
     TracklistSelectionsAction, edit_type,
     edit_tracks_action_type_strings),
-  YAML_FIELD_INT (
-    TracklistSelectionsAction, ival_before),
+  CYAML_FIELD_SEQUENCE_COUNT (
+    "ival_before",
+    CYAML_FLAG_POINTER | CYAML_FLAG_OPTIONAL,
+    TracklistSelectionsAction, ival_before,
+    num_tracks, &int_schema, 0, CYAML_UNLIMITED),
   YAML_FIELD_INT (
     TracklistSelectionsAction, ival_after),
   YAML_FIELD_INT (
     TracklistSelectionsAction, new_direct_out_pos),
+  CYAML_FIELD_SEQUENCE_COUNT (
+    "colors_before",
+    CYAML_FLAG_POINTER | CYAML_FLAG_OPTIONAL,
+    TracklistSelectionsAction, colors_before,
+    num_tracks, &gdk_rgba_schema_default, 0,
+    CYAML_UNLIMITED),
   YAML_FIELD_MAPPING_EMBEDDED (
     TracklistSelectionsAction, new_color,
     gdk_rgba_fields_schema),

@@ -117,7 +117,8 @@ host_get_buffer_size (
   NativeHostHandle handle)
 {
   uint32_t buffer_size = 512;
-  if (AUDIO_ENGINE->block_length > 0)
+  if (PROJECT && AUDIO_ENGINE &&
+      AUDIO_ENGINE->block_length > 0)
     buffer_size =
       (uint32_t) AUDIO_ENGINE->block_length;
 
@@ -129,7 +130,8 @@ host_get_sample_rate (
   NativeHostHandle handle)
 {
   double sample_rate = 44000.0;
-  if (AUDIO_ENGINE->sample_rate > 0)
+  if (PROJECT && AUDIO_ENGINE &&
+      AUDIO_ENGINE->sample_rate > 0)
     sample_rate =
       (double) AUDIO_ENGINE->sample_rate;
 
@@ -140,6 +142,11 @@ static bool
 host_is_offline (
   NativeHostHandle handle)
 {
+  if (!PROJECT || !AUDIO_ENGINE)
+    {
+      return true;
+    }
+
   return !AUDIO_ENGINE->run;
 }
 
@@ -622,6 +629,7 @@ bool
 carla_native_plugin_has_custom_ui (
   PluginDescriptor * descr)
 {
+#if 0
   CarlaNativePlugin * native_pl = _create (NULL);
 
   /* instantiate the plugin to get its info */
@@ -652,6 +660,8 @@ carla_native_plugin_has_custom_ui (
   carla_native_plugin_free (native_pl);
 
   return has_custom_ui;
+#endif
+  g_return_val_if_reached (false);
 }
 
 /**
@@ -1008,6 +1018,10 @@ carla_native_plugin_get_descriptor_from_cached (
   descr->category_str =
     carla_category_to_zrythm_category_str (
       info->category);
+  descr->min_bridge_mode =
+    plugin_descriptor_get_min_bridge_mode (descr);
+  descr->has_custom_ui =
+    info->hints & PLUGIN_HAS_CUSTOM_UI;
 
   return descr;
 }

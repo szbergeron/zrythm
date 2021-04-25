@@ -159,6 +159,32 @@ tracklist_selections_contains_undeletable_track (
   TracklistSelections * self);
 
 /**
+ * Returns whether the selections contain a soloed
+ * track if @ref soloed is true or an unsoloed track
+ * if @ref soloed is false.
+ *
+ * @param soloed Whether to check for soloed or
+ *   unsoloed tracks.
+ */
+bool
+tracklist_selections_contains_soloed_track (
+  TracklistSelections * self,
+  bool                  soloed);
+
+/**
+ * Returns whether the selections contain a muted
+ * track if @ref muted is true or an unmuted track
+ * if @ref muted is false.
+ *
+ * @param muted Whether to check for muted or
+ *   unmuted tracks.
+ */
+bool
+tracklist_selections_contains_muted_track (
+  TracklistSelections * self,
+  bool                  muted);
+
+/**
  * Returns if the Track is selected or not.
  */
 int
@@ -233,9 +259,20 @@ void
 tracklist_selections_sort (
   TracklistSelections * self);
 
+/**
+ * Marks the tracks to be bounced.
+ *
+ * @param with_parents Also mark all the track's
+ *   parents recursively.
+ * @param mark_master Also mark the master track.
+ *   Set to true when exporting the mixdown, false
+ *   otherwise.
+ */
 void
 tracklist_selections_mark_for_bounce (
-  TracklistSelections * ts);
+  TracklistSelections * ts,
+  bool                  with_parents,
+  bool                  mark_master);
 
 void
 tracklist_selections_free (

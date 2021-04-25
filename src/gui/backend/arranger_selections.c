@@ -418,8 +418,7 @@ arranger_selections_clone (
       new_##sc = \
         (cc *) \
         arranger_object_clone ( \
-          (ArrangerObject *) sc, \
-          ARRANGER_OBJECT_CLONE_COPY); \
+          (ArrangerObject *) sc); \
       ArrangerObject * new_sc_obj = \
         (ArrangerObject *) new_##sc; \
       sc_obj->transient = new_sc_obj; \
@@ -815,7 +814,8 @@ arranger_selections_get_start_pos (
   MidiArrangerSelections * mas;
   AutomationSelections * as;
 
-  position_set_to_bar (pos, INT_MAX);
+  position_set_to_bar (pos, 80000);
+  g_return_if_fail (pos->ticks > 0);
     /*&pos, TRANSPORT->total_bars);*/
 
 #define GET_START_POS(sel,cc,sc) \
@@ -1045,9 +1045,7 @@ arranger_selections_get_first_object (
   AutomationSelections * as;
 
   Position pos;
-  position_set_to_bar (
-    /*&pos, TRANSPORT->total_bars);*/
-    &pos, INT_MAX);
+  position_set_to_bar (&pos, 80000);
   ArrangerObject * ret_obj = NULL;
 
 #define GET_FIRST_OBJ(sel,cc,sc) \
@@ -2086,8 +2084,7 @@ arranger_selections_merge (
               MidiNote * mn = r->midi_notes[j];
               ArrangerObject * new_obj =
                 arranger_object_clone (
-                  (ArrangerObject *) mn,
-                  ARRANGER_OBJECT_CLONE_COPY_MAIN);
+                  (ArrangerObject *) mn);
               MidiNote * new_mn =
                 (MidiNote *) new_obj;
 
@@ -2166,8 +2163,7 @@ arranger_selections_merge (
                 r->chord_objects[j];
               ArrangerObject * new_obj =
                 arranger_object_clone (
-                  (ArrangerObject *) co,
-                  ARRANGER_OBJECT_CLONE_COPY_MAIN);
+                  (ArrangerObject *) co);
               ChordObject * new_co =
                 (ChordObject *) new_obj;
 
@@ -2200,8 +2196,7 @@ arranger_selections_merge (
               AutomationPoint * ap = r->aps[j];
               ArrangerObject * new_obj =
                 arranger_object_clone (
-                  (ArrangerObject *) ap,
-                  ARRANGER_OBJECT_CLONE_COPY_MAIN);
+                  (ArrangerObject *) ap);
               AutomationPoint * new_ap =
                 (AutomationPoint *) new_obj;
 

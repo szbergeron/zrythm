@@ -494,6 +494,9 @@ project_validate (Project * self)
 
   tracklist_validate (self->tracklist);
 
+  region_link_group_manager_validate (
+    &self->region_link_group_manager);
+
   /* TODO add arranger_object_get_all and check
    * positions (arranger_object_validate) */
 
@@ -1622,6 +1625,7 @@ serialize_project_thread (
     "%s: successfully saved project", __func__);
 
 serialize_end:
+  zix_sem_post (&UNDO_MANAGER->action_sem);
   data->finished = true;
   return NULL;
 }
@@ -1687,6 +1691,11 @@ project_save (
   const bool   show_notification,
   const bool   async)
 {
+  if (async)
+    {
+      zix_sem_wait (&UNDO_MANAGER->action_sem);
+    }
+
   project_validate (self);
 
   int i, j;

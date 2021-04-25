@@ -278,10 +278,10 @@ Args:
            "export-filename-pattern"
            '("append-format"
              "prepend-date-append-format"))
-         ;; TODO
          (print-enum
            "note-length"
-           '("2/1" "1/1" "1/2"))
+           '("bar" "beat" "2/1" "1/1" "1/2" "1/4"
+             "1/8" "1/16" "1/32"  "1/64" "1/128"))
          (print-enum
            "note-type"
            '("normal" "dotted" "triplet"))
@@ -293,7 +293,8 @@ Args:
            '("notes" "numbers"))
          (print-enum
            "plugin-browser-tab"
-           '("collection" "category" "protocol"))
+           '("collection" "author" "category"
+             "protocol"))
          (print-enum
            "plugin-browser-filter"
            '("none" "instrument" "effect" "modulator"
@@ -337,6 +338,10 @@ Args:
            "recording-mode"
            '("overwrite-events" "merge-events"
              "takes" "muted-takes"))
+         (print-enum
+           "bounce-step"
+           '("before-inserts" "pre-fader"
+             "post-fader"))
          (newline)
 
          ;; -- print normal schemas --
@@ -378,16 +383,21 @@ Args:
              "ui"
              (list
                (make-schema-key
-                 "bounce-with-effects" "b" "true"
-                 "Bounce with effects"
-                 "If set to true, the effects chain will be included in the bounced material.")
+                 "bounce-with-parents" "b" "true"
+                 "Bounce with parents"
+                 "Whether to bounce with parent tracks (direct outputs).")
+               (make-schema-key-with-enum
+                 "bounce-step"
+                 "bounce-step" "post-fader"
+                 "Bounce step"
+                 "Step in the processing chain to bounce at.")
                (make-schema-key
                  "bounce-tail" "i" "0"
                  "Bounce tail"
                  "Tail to allow when bouncing (for example to catch reverb tails), in milliseconds.")
                (make-schema-key-with-enum
                  "timeline-object-length"
-                 "note-length" "1/1"
+                 "note-length" "bar"
                  "Timeline object length"
                  "Default length to use when creating timeline objects.")
                (make-schema-key-with-enum
@@ -402,7 +412,7 @@ Args:
                  "The length of the last created timeline object (in ticks).")
                (make-schema-key-with-enum
                  "editor-object-length"
-                 "note-length" "1/1"
+                 "note-length" "beat"
                  "Editor object length"
                  "Default length to use when creating editor objects.")
                (make-schema-key-with-enum
@@ -489,6 +499,11 @@ Args:
                  "Plugin browser collections"
                  "Tree paths of the selected collections in the plugin browser.")
                (make-schema-key
+                 "plugin-browser-authors" "as"
+                 "[]"
+                 "Plugin browser authors"
+                 "Tree paths of the selected authors in the plugin browser.")
+               (make-schema-key
                  "plugin-browser-categories" "as"
                  "[]"
                  "Plugin browser categories"
@@ -559,6 +574,10 @@ Args:
                  "artist" "s" "Zrythm"
                  "Artist"
                  "Artist to use when exporting, if the file type supports it.")
+               (make-schema-key
+                 "title" "s" "My Project"
+                 "Title"
+                 "Title to use when exporting, if the file type supports it.")
                (make-schema-key-with-enum
                  "time-range" "export-time-range"
                  "song"

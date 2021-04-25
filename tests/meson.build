@@ -30,7 +30,8 @@ if get_option ('tests')
     'G_TEST_BUILDDIR', meson.current_build_dir ())
   test_env.set ('G_SLICE', 'debug-blocks')
   test_env.set (
-    'GUILE_LOAD_PATH', '$GUILE_LOAD_PATH:' + meson.current_build_dir ())
+    'GUILE_LOAD_PATH',
+    '$GUILE_LOAD_PATH:' + meson.current_build_dir ())
   test_env.set ('G_DEBUG', 'gc-friendly')
   test_env.set ('MALLOC_CHECK_', '3')
   test_env.set ('VST_PATH', '/tmp/zrythm_vst')
@@ -40,6 +41,7 @@ if get_option ('tests')
   test_env.set ('ZRYTHM_DEBUG', '1')
   test_env.set ('Z_CURL_TIMEOUT', '10')
   test_env.set ('G_MESSAGES_DEBUG', 'zrythm')
+  test_env.set ('ZRYTHM_DSP_THREADS', '3')
 
   test_config = configuration_data ()
   test_config.set_quoted (
@@ -104,6 +106,60 @@ if get_option ('tests')
         name.to_upper() + '_BUNDLE', '')
     endif
   endforeach
+
+  # use custom lv2apply until upstream merges URID
+  # support
+  lv2apply = executable (
+    'lv2apply',
+    sources: [
+      'helpers/lv2apply.c',
+      '../src/utils/objects.c',
+      '../src/utils/symap.c',
+      ],
+    dependencies : [
+      sndfile_dep,
+      lilv_dep,
+      gtk_dep,
+      ],
+    include_directories: all_inc,
+    c_args: [ common_cflags ],
+    link_args: common_ldflags,
+    install: false,
+    )
+
+  test_lv2apply_wavs = []
+  if test_config.has ('HAVE_MVERB')
+    file_prefix = 'test_mixdown_midi_routed_to_instrument_track'
+
+    # add reverb to file
+    test_lv2apply_wavs += custom_target (
+      file_prefix + '_w_reverb.ogg',
+      input: file_prefix + '.ogg',
+      output: file_prefix + '_w_reverb.ogg',
+      command: [
+        lv2apply, '-i', '@INPUT@',
+        '-o', '@OUTPUT@',
+        test_config.get_unquoted ('MVERB_URI'),
+        ])
+    test_config.set_quoted (
+      'TEST_WAV3',
+      meson.current_build_dir () / file_prefix + '_w_reverb.ogg')
+
+    # add reverb to file + half gain
+    test_lv2apply_wavs += custom_target (
+      file_prefix + '_w_reverb_half_gain.ogg',
+      input: file_prefix + '.ogg',
+      output: file_prefix + '_w_reverb_half_gain.ogg',
+      command: [
+        lv2apply, '-i', '@INPUT@',
+        '-c', 'gain', '50',
+        '-o', '@OUTPUT@',
+        test_config.get_unquoted ('MVERB_URI'),
+        ])
+    test_config.set_quoted (
+      'TEST_WAV4',
+      meson.current_build_dir () / file_prefix + '_w_reverb_half_gain.ogg')
+  endif
 
   # VST
   foreach name, filename : ext_vst_plugins
@@ -297,6 +353,7 @@ if get_option ('tests')
         env: test_env, suite: suite,
         is_parallel: is_parallel,
         args: 'args' in info ? info['args'] : [],
+        depends: test_lv2apply_wavs,
         timeout: timeout)
     else
       # create C executable for Guile runner

@@ -54,21 +54,21 @@ z_gtk_get_primary_monitor_scale_factor (void)
     gdk_display_get_default ();
   if (!display)
     {
-      g_warning ("no display");
+      g_message ("no display");
       goto return_default_scale_factor;
     }
   monitor =
     gdk_display_get_primary_monitor (display);
   if (!monitor)
     {
-      g_warning ("no primary monitor");
+      g_message ("no primary monitor");
       goto return_default_scale_factor;
     }
   scale_factor =
     gdk_monitor_get_scale_factor (monitor);
   if (scale_factor < 1)
     {
-      g_warning (
+      g_message (
         "invalid scale factor: %d", scale_factor);
       goto return_default_scale_factor;
     }
@@ -76,7 +76,7 @@ z_gtk_get_primary_monitor_scale_factor (void)
   return scale_factor;
 
 return_default_scale_factor:
-  g_warning (
+  g_message (
     "failed to get refresh rate from device, "
     "returning default");
   return 1;
@@ -352,15 +352,66 @@ z_gtk_configure_simple_combo_box (
     NULL);
 }
 
+/**
+ * Sets the icon name and optionally text.
+ */
+void
+z_gtk_button_set_icon_name_and_text (
+  GtkButton *  btn,
+  const char * name,
+  const char * text,
+  bool         icon_first,
+  GtkOrientation orientation,
+  int          spacing)
+{
+  GtkWidget * img =
+    gtk_image_new_from_icon_name (
+      name, GTK_ICON_SIZE_BUTTON);
+  gtk_widget_set_visible (img, 1);
+  z_gtk_container_remove_all_children (
+    GTK_CONTAINER (btn));
+  GtkWidget * box =
+    gtk_box_new (orientation, spacing);
+  gtk_widget_set_visible (box, true);
+  GtkWidget * label =
+    gtk_label_new (text);
+  gtk_widget_set_visible (label, true);
+  if (orientation == GTK_ORIENTATION_HORIZONTAL)
+    {
+      gtk_widget_set_hexpand (label, true);
+    }
+  else
+    {
+      gtk_widget_set_vexpand (label, true);
+    }
+
+  if (icon_first)
+    {
+      gtk_container_add (GTK_CONTAINER (box), img);
+      gtk_container_add (
+        GTK_CONTAINER (box), label);
+    }
+  else
+    {
+      gtk_container_add (
+        GTK_CONTAINER (box), label);
+      gtk_container_add (GTK_CONTAINER (box), img);
+    }
+  gtk_container_add (
+    GTK_CONTAINER (btn), box);
+}
+
+/**
+ * Sets the icon name and optionally text.
+ */
 void
 z_gtk_button_set_icon_name (
-  GtkButton * btn,
+  GtkButton *  btn,
   const char * name)
 {
   GtkWidget * img =
     gtk_image_new_from_icon_name (
-      name,
-      GTK_ICON_SIZE_BUTTON);
+      name, GTK_ICON_SIZE_BUTTON);
   gtk_widget_set_visible (img, 1);
   z_gtk_container_remove_all_children (
     GTK_CONTAINER (btn));
@@ -483,13 +534,12 @@ z_gtk_button_set_emblem (
  * Creates a button with the given icon name.
  */
 GtkButton *
-z_gtk_button_new_with_icon (const char * name)
+z_gtk_button_new_with_icon (
+  const char * name)
 {
   GtkButton * btn = GTK_BUTTON (gtk_button_new ());
-  z_gtk_button_set_icon_name (btn,
-                              name);
-  gtk_widget_set_visible (GTK_WIDGET (btn),
-                          1);
+  z_gtk_button_set_icon_name (btn, name);
+  gtk_widget_set_visible (GTK_WIDGET (btn), true);
   return btn;
 }
 
@@ -497,14 +547,36 @@ z_gtk_button_new_with_icon (const char * name)
  * Creates a toggle button with the given icon name.
  */
 GtkToggleButton *
-z_gtk_toggle_button_new_with_icon (const char * name)
+z_gtk_toggle_button_new_with_icon (
+  const char * name)
 {
   GtkToggleButton * btn =
     GTK_TOGGLE_BUTTON (gtk_toggle_button_new ());
-  z_gtk_button_set_icon_name (GTK_BUTTON (btn),
-                              name);
-  gtk_widget_set_visible (GTK_WIDGET (btn),
-                          1);
+  z_gtk_button_set_icon_name (
+    GTK_BUTTON (btn), name);
+  gtk_widget_set_visible (GTK_WIDGET (btn), true);
+
+  return btn;
+}
+
+/**
+ * Creates a toggle button with the given icon name.
+ */
+GtkToggleButton *
+z_gtk_toggle_button_new_with_icon_and_text (
+  const char * name,
+  const char * text,
+  bool         icon_first,
+  GtkOrientation orientation,
+  int          spacing)
+{
+  GtkToggleButton * btn =
+    GTK_TOGGLE_BUTTON (gtk_toggle_button_new ());
+  z_gtk_button_set_icon_name_and_text (
+    GTK_BUTTON (btn), name, text, icon_first,
+    orientation, spacing);
+  gtk_widget_set_visible (GTK_WIDGET (btn), true);
+
   return btn;
 }
 

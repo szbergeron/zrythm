@@ -2053,8 +2053,7 @@ autofill (
             (ZRegion *)
             arranger_object_clone (
               (ArrangerObject *)
-              clip_editor_region,
-              ARRANGER_OBJECT_CLONE_COPY_MAIN);
+              clip_editor_region);
         }
       else
         {
@@ -3257,6 +3256,7 @@ drag_update (
                 self, &self->curr_pos,
                 F_NOT_DRY_RUN);
             }
+          move_items_y (self, offset_y);
         }
       else if (self->type == TYPE (AUDIO))
         {

@@ -87,6 +87,27 @@ typedef enum ExportMode
   EXPORT_MODE_REGIONS,
 } ExportMode;
 
+typedef enum BounceStep
+{
+  BOUNCE_STEP_BEFORE_INSERTS,
+  BOUNCE_STEP_PRE_FADER,
+  BOUNCE_STEP_POST_FADER,
+} BounceStep;
+
+static const char * bounce_step_str[] =
+{
+  __("Before inserts"),
+  __("Pre-fader"),
+  __("Post fader"),
+};
+
+static inline const char *
+bounce_step_to_str (
+  BounceStep bounce_step)
+{
+  return bounce_step_str[bounce_step];
+}
+
 /**
  * Export settings to be passed to the exporter
  * to use.
@@ -95,6 +116,7 @@ typedef struct ExportSettings
 {
   AudioFormat       format;
   char *            artist;
+  char *            title;
   char *            genre;
 
   /** Bit depth (16/24/64). */
@@ -103,6 +125,18 @@ typedef struct ExportSettings
 
   /** Export mode. */
   ExportMode        mode;
+
+  /** Bounce with parent tracks (direct outs). */
+  bool              bounce_with_parents;
+
+  /**
+   * Bounce step (pre inserts, pre fader, post
+   * fader).
+   *
+   * Only valid if ExportSettings.bounce_with_parents
+   * is false.
+   */
+  BounceStep        bounce_step;
 
   /** Positions in case of custom time range. */
   Position          custom_start;

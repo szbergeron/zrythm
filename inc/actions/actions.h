@@ -394,6 +394,11 @@ activate_hide_selected_tracks (
   gpointer       user_data);
 
 DECLARE_SIMPLE (activate_pin_selected_tracks);
+DECLARE_SIMPLE (activate_solo_selected_tracks);
+DECLARE_SIMPLE (activate_unsolo_selected_tracks);
+DECLARE_SIMPLE (activate_mute_selected_tracks);
+DECLARE_SIMPLE (activate_unmute_selected_tracks);
+DECLARE_SIMPLE (activate_change_track_color);
 
 void
 activate_snap_events (GSimpleAction *action,

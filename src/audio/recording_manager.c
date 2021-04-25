@@ -459,7 +459,7 @@ recording_manager_handle_recording (
 
   /* add recorded track material to event queue */
 
-  if (track_has_piano_roll (tr))
+  if (track_type_has_piano_roll (tr->type))
     {
       MidiEvents * midi_events =
         track_processor->midi_in->midi_events;
@@ -1412,7 +1412,7 @@ handle_start_recording (
     {
       tr->recording_paused = false;
 
-      if (track_has_piano_roll (tr))
+      if (track_type_has_piano_roll (tr->type))
         {
           /* create region */
           int new_lane_pos = tr->num_lanes - 1;
@@ -1486,7 +1486,12 @@ recording_manager_process_events (
       if (ev->type < 0)
         {
           g_warn_if_reached ();
-          continue;
+          goto return_to_pool;
+        }
+
+      if (self->freeing)
+        {
+          goto return_to_pool;
         }
 
       /*g_message ("event type %d", ev->type);*/
@@ -1588,6 +1593,7 @@ recording_manager_process_events (
         }
 
       /*UP_RETURNED (ev);*/
+return_to_pool:
       object_pool_return (
         self->event_obj_pool, ev);
     }
@@ -1631,6 +1637,8 @@ recording_manager_free (
   RecordingManager * self)
 {
   g_message ("%s: Freeing...", __func__);
+
+  self->freeing = true;
 
   /* stop source func */
   g_source_remove_and_zero (self->source_id);
