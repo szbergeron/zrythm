@@ -458,6 +458,11 @@ transport_set_playhead_pos (
   Transport * self,
   Position *  pos);
 
+void
+transport_set_playhead_to_bar (
+  Transport * self,
+  int         bar);
+
 /**
  * Getter for playhead Position.
  */
@@ -613,10 +618,15 @@ transport_position_is_inside_punch_range (
 /**
  * Recalculates the total bars based on the last
  * object's position.
+ *
+ * @param sel If given, only these objects will
+ *   be checked, otherwise every object in the
+ *   project will be checked.
  */
 void
 transport_recalculate_total_bars (
-  Transport * self);
+  Transport *          self,
+  ArrangerSelections * sel);
 
 /**
  * Updates the total bars.

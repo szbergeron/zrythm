@@ -187,6 +187,7 @@ region_move_to_track (
   if (region_has_link_group (region))
     {
       link_group = region_get_link_group (region);
+      g_return_if_fail (link_group);
       region_link_group_remove_region (
         link_group, region, false, true);
     }
@@ -331,7 +332,7 @@ region_stretch (
         g_warn_if_fail (returned_frames > 0);
         new_clip->num_frames = returned_frames;
         audio_clip_write_to_pool (
-          new_clip, F_NO_PARTS);
+          new_clip, F_NO_PARTS, F_NOT_BACKUP);
         (void) obj;
         /* readjust end position to match the
          * number of frames exactly */

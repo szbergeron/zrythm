@@ -442,11 +442,8 @@ typedef struct AudioEngine
   /** Input device processor. */
   HardwareProcessor * hw_in_processor;
 
-  /* don't need to handle outputs */
-#if 0
   /** Output device processor. */
   HardwareProcessor * hw_out_processor;
-#endif
 
 #if 0
   /**
@@ -835,6 +832,9 @@ engine_fields_schema[] =
   YAML_FIELD_MAPPING_PTR (
     AudioEngine, hw_in_processor,
     hardware_processor_fields_schema),
+  YAML_FIELD_MAPPING_PTR (
+    AudioEngine, hw_out_processor,
+    hardware_processor_fields_schema),
 
   CYAML_FIELD_END
 };
@@ -948,6 +948,8 @@ engine_process_events (
  *
  * Clears buffers, marks all as unprocessed, etc.
  */
+NONNULL
+HOT
 void
 engine_process_prepare (
   AudioEngine * self,
@@ -959,6 +961,8 @@ engine_process_prepare (
  * To be called by each implementation in its
  * callback.
  */
+NONNULL
+HOT
 int
 engine_process (
   AudioEngine * self,
@@ -966,16 +970,25 @@ engine_process (
 
 /**
  * To be called after processing for common logic.
+ *
+ * @param roll_nframes Frames to roll (add to the
+ *   playhead - if transport rolling).
+ * @param nframes Total frames for this processing
+ *   cycle.
  */
+NONNULL
+HOT
 void
 engine_post_process (
-  AudioEngine * self,
+  AudioEngine *   self,
+  const nframes_t roll_nframes,
   const nframes_t nframes);
 
 /**
  * Called to fill in the external buffers at the end
  * of the processing cycle.
  */
+NONNULL
 void
 engine_fill_out_bufs (
   AudioEngine *   self,

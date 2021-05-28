@@ -906,6 +906,7 @@ move_items_x (
 {
   ArrangerSelections * sel =
     arranger_widget_get_selections (self);
+  g_return_if_fail (sel);
   arranger_selections_add_ticks (
     sel, ticks_diff);
 
@@ -918,6 +919,8 @@ move_items_x (
       g_return_if_fail (region);
       automation_region_force_sort (region);
     }
+
+  transport_recalculate_total_bars (TRANSPORT, sel);
 
   EVENTS_PUSH (
     ET_ARRANGER_SELECTIONS_IN_TRANSIT, sel);
@@ -1500,6 +1503,8 @@ arranger_widget_on_key_action (
 {
   const guint keyval = event->keyval;
 
+  g_debug ("arranger widget key action");
+
   if (z_gtk_keyval_is_ctrl (keyval))
     {
       self->ctrl_held = 1;
@@ -1737,7 +1742,7 @@ arranger_widget_on_key_action (
                     /*UNDO_MANAGER, action);*/
                 }
             }
-        }
+        } /* arranger selections has any */
     }
 
   if (self->type == TYPE (TIMELINE))
@@ -1748,13 +1753,12 @@ arranger_widget_on_key_action (
 
   /*arranger_widget_update_visibility (self);*/
 
-  arranger_widget_refresh_cursor (
-    self);
+  arranger_widget_refresh_cursor (self);
 
   /*if (num > 0)*/
     /*auto_scroll (self);*/
 
-  return FALSE;
+  return true;
 }
 
 /**
@@ -1829,6 +1833,7 @@ multipress_pressed (
  * @param autofilling Whether this is part of an
  *   autofill action.
  */
+NONNULL
 static void
 create_item (
   ArrangerWidget * self,
@@ -1989,9 +1994,11 @@ create_item (
   if (!autofilling)
     {
       /* set the start selections */
+      ArrangerSelections * sel =
+        arranger_widget_get_selections (self);
+      g_return_if_fail (sel);
       self->sel_at_start =
-        arranger_selections_clone (
-          arranger_widget_get_selections (self));
+        arranger_selections_clone (sel);
     }
 }
 
@@ -2008,6 +2015,7 @@ create_item (
  * the default length at the given position, unless
  * an object already exists there.
  */
+NONNULL
 static void
 autofill (
   ArrangerWidget * self,
@@ -2025,6 +2033,7 @@ autofill (
         UI_OVERLAY_ACTION_AUTOFILLING;
       ArrangerSelections * sel =
         arranger_widget_get_selections (self);
+      g_return_if_fail (sel);
 
       /* clear the actual selections to append
        * created objects */
@@ -2107,12 +2116,14 @@ drag_cancel (
  * Sets the start pos of the earliest object and
  * the flag whether the earliest object exists.
  */
+NONNULL
 static void
 set_earliest_obj (
   ArrangerWidget * self)
 {
   ArrangerSelections * sel =
     arranger_widget_get_selections (self);
+  g_return_if_fail (sel);
   if (arranger_selections_has_any (sel))
     {
       arranger_selections_get_start_pos (
@@ -2674,6 +2685,7 @@ drag_begin (
  *   objects in the range or exactly at the current
  *   point.
  */
+NONNULL
 static void
 select_in_range (
   ArrangerWidget * self,
@@ -2683,9 +2695,11 @@ select_in_range (
   bool             ignore_frozen,
   bool             delete)
 {
+  ArrangerSelections * arranger_sel =
+    arranger_widget_get_selections (self);
+  g_return_if_fail (arranger_sel);
   ArrangerSelections * prev_sel =
-    arranger_selections_clone (
-      arranger_widget_get_selections (self));
+    arranger_selections_clone (arranger_sel);
 
   if (delete && in_range)
     {
@@ -2949,11 +2963,12 @@ select_in_range (
     }
 }
 
+NONNULL
 static void
 drag_update (
   GtkGestureDrag * gesture,
-  gdouble         offset_x,
-  gdouble         offset_y,
+  gdouble          offset_x,
+  gdouble          offset_y,
   ArrangerWidget * self)
 {
   if (!self->drag_update_started &&
@@ -3064,6 +3079,7 @@ drag_update (
       {
         ArrangerSelections * sel =
           arranger_widget_get_selections (self);
+        g_return_if_fail (sel);
         arranger_selections_clear (
           sel, F_NO_FREE, F_NO_PUBLISH_EVENTS);
         self->sel_to_delete =
@@ -3076,6 +3092,7 @@ drag_update (
       {
         ArrangerSelections * sel =
           arranger_widget_get_selections (self);
+        g_return_if_fail (sel);
         arranger_selections_clear (
           sel, F_NO_FREE, F_NO_PUBLISH_EVENTS);
         self->sel_to_delete =
@@ -3266,6 +3283,12 @@ drag_update (
                 self, &self->curr_pos);
             }
         }
+      {
+        ArrangerSelections * sel =
+          arranger_widget_get_selections (self);
+        transport_recalculate_total_bars (
+          TRANSPORT, sel);
+      }
       break;
     case UI_OVERLAY_ACTION_RESIZING_UP:
       if (self->type == TYPE (MIDI_MODIFIER))
@@ -3854,6 +3877,7 @@ on_drag_end_audio (
     }
 }
 
+NONNULL
 static void
 on_drag_end_timeline (
   ArrangerWidget * self)
@@ -3862,6 +3886,7 @@ on_drag_end_timeline (
 
   ArrangerSelections * sel =
     arranger_widget_get_selections (self);
+  g_return_if_fail (sel);
 
   switch (self->action)
     {
@@ -4219,6 +4244,7 @@ drag_end (
         UI_OVERLAY_ACTION_DELETE_SELECTING;
       ArrangerSelections * sel =
         arranger_widget_get_selections (self);
+      g_return_if_fail (sel);
       arranger_selections_clear (
         sel, F_NO_FREE, F_NO_PUBLISH_EVENTS);
       self->sel_to_delete =
@@ -4708,17 +4734,15 @@ arranger_widget_redraw_whole (
     rect.width, rect.height);
 }
 
-/**
- * Only redraws the playhead part.
- */
-void
-arranger_widget_redraw_playhead (
+bool
+arranger_widget_is_playhead_visible (
   ArrangerWidget * self)
 {
   GdkRectangle rect;
   arranger_widget_get_visible_rect (self, &rect);
 
-  int playhead_x = arranger_widget_get_playhead_px (self);
+  int playhead_x =
+    arranger_widget_get_playhead_px (self);
   int min_x =
     MIN (self->last_playhead_px, playhead_x);
   min_x = MAX (min_x - 4, rect.x);
@@ -4726,22 +4750,91 @@ arranger_widget_redraw_playhead (
     MAX (self->last_playhead_px, playhead_x);
   max_x = MIN (max_x + 4, rect.x + rect.width);
 
-  /* skip if playhead is not in the visible
-   * rectangle */
   int width = max_x - min_x;
-  if (width < 0)
-    {
-#if 0
-      g_debug (
-        "playhead not currently visible in "
-        "arranger, skipping redraw");
-#endif
-      return;
-    }
 
+  return width >= 0;
+}
+
+/**
+ * Only redraws the playhead part.
+ */
+void
+arranger_widget_redraw_playhead (
+  ArrangerWidget * self)
+{
+  if (!gtk_widget_is_visible (GTK_WIDGET (self)) ||
+      !arranger_widget_is_playhead_visible (self))
+    return;
+
+  GdkRectangle rect;
+  arranger_widget_get_visible_rect (self, &rect);
+
+  int buffer = 5;
+  int playhead_x =
+    arranger_widget_get_playhead_px (self);
+  int min_x =
+    MIN (self->last_playhead_px, playhead_x);
+  min_x = MAX (min_x - buffer, rect.x);
+  int max_x =
+    MAX (self->last_playhead_px, playhead_x);
+  max_x = MIN (max_x + buffer, rect.x + rect.width);
+
+  /*g_message ("queueing redraw %d", playhead_x);*/
   gtk_widget_queue_draw_area (
     GTK_WIDGET (self), min_x, rect.y,
     (max_x - min_x), rect.height);
+
+  /* auto scroll */
+  bool scroll_edges = false;
+  bool follow = false;
+  if (self->type == ARRANGER_WIDGET_TYPE_TIMELINE)
+    {
+      scroll_edges =
+        g_settings_get_boolean (
+          S_UI, "timeline-playhead-scroll-edges");
+      follow =
+        g_settings_get_boolean (
+          S_UI, "timeline-playhead-follow");
+    }
+  else
+    {
+      scroll_edges =
+        g_settings_get_boolean (
+          S_UI, "editor-playhead-scroll-edges");
+      follow =
+        g_settings_get_boolean (
+          S_UI, "editor-playhead-follow");
+    }
+
+  GtkScrolledWindow * scroll =
+    arranger_widget_get_scrolled_window (self);
+  GtkAdjustment * adj =
+    gtk_scrolled_window_get_hadjustment (scroll);
+  if (follow)
+    {
+      /* scroll */
+      gtk_adjustment_set_value (
+        adj, playhead_x - rect.width / 2);
+    }
+  else if (scroll_edges)
+    {
+      buffer = 32;
+      if (playhead_x >
+            ((rect.x + rect.width) - buffer) ||
+          playhead_x < rect.x + buffer)
+        {
+          /* scroll */
+          gtk_adjustment_set_value (
+            adj,
+            CLAMP (
+              (double) playhead_x - buffer,
+              gtk_adjustment_get_lower (adj),
+              gtk_adjustment_get_upper (adj)));
+        }
+    }
+
+  /* cache x to draw */
+  /*self->queued_playhead_px = playhead_x;*/
 }
 
 /**

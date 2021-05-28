@@ -52,6 +52,7 @@
 #include "gui/widgets/bot_dock_edge.h"
 #include "gui/widgets/bot_bar.h"
 #include "gui/widgets/center_dock.h"
+#include "gui/widgets/channel_slot.h"
 #include "gui/widgets/chord_arranger.h"
 #include "gui/widgets/chord_editor_space.h"
 #include "gui/widgets/clip_editor.h"
@@ -984,13 +985,32 @@ activate_cut (
     project_get_arranger_selections_for_last_selection (
       PROJECT);
 
-  if (sel && arranger_selections_has_any (sel))
+  UndoableAction * ua = NULL;
+  switch (PROJECT->last_selection)
     {
-      UndoableAction * ua =
-        arranger_selections_action_new_delete (
-          sel);
-      undo_manager_perform (
-        UNDO_MANAGER, ua);
+    case SELECTION_TYPE_TIMELINE:
+      if (sel && arranger_selections_has_any (sel))
+        {
+          ua =
+            arranger_selections_action_new_delete (
+              sel);
+          undo_manager_perform (UNDO_MANAGER, ua);
+        }
+      break;
+    case SELECTION_TYPE_INSERT:
+    case SELECTION_TYPE_MIDI_FX:
+      if (mixer_selections_has_any (
+            MIXER_SELECTIONS))
+        {
+          ua =
+            mixer_selections_action_new_delete (
+              MIXER_SELECTIONS);
+          undo_manager_perform (UNDO_MANAGER, ua);
+        }
+      break;
+    default:
+      g_debug ("doing nothing");
+      break;
     }
 }
 
@@ -1005,29 +1025,56 @@ activate_copy (
     project_get_arranger_selections_for_last_selection (
       PROJECT);
 
-  if (sel)
+  switch (PROJECT->last_selection)
     {
-      Clipboard * clipboard =
-        clipboard_new_for_arranger_selections (
-          sel, true);
-      if (clipboard->timeline_sel)
+    case SELECTION_TYPE_TIMELINE:
+      if (sel)
         {
-          timeline_selections_set_vis_track_indices (
-            clipboard->timeline_sel);
+          Clipboard * clipboard =
+            clipboard_new_for_arranger_selections (
+              sel, F_CLONE);
+          if (clipboard->timeline_sel)
+            {
+              timeline_selections_set_vis_track_indices (
+                clipboard->timeline_sel);
+            }
+          char * serialized =
+            yaml_serialize (
+              clipboard, &clipboard_schema);
+          g_return_if_fail (serialized);
+          gtk_clipboard_set_text (
+            DEFAULT_CLIPBOARD,
+            serialized, -1);
+          clipboard_free (clipboard);
+          g_free (serialized);
         }
-      char * serialized =
-        yaml_serialize (
-          clipboard, &clipboard_schema);
-      g_return_if_fail (serialized);
-      gtk_clipboard_set_text (
-        DEFAULT_CLIPBOARD,
-        serialized, -1);
-      clipboard_free (clipboard);
-      g_free (serialized);
-    }
-  else
-    {
-      g_warning ("no selections to copy");
+      else
+        {
+          g_warning ("no selections to copy");
+        }
+      break;
+    case SELECTION_TYPE_INSERT:
+    case SELECTION_TYPE_MIDI_FX:
+      if (mixer_selections_has_any (
+            MIXER_SELECTIONS))
+        {
+          Clipboard * clipboard =
+            clipboard_new_for_mixer_selections (
+              MIXER_SELECTIONS, F_CLONE);
+          char * serialized =
+            yaml_serialize (
+              clipboard, &clipboard_schema);
+          g_return_if_fail (serialized);
+          gtk_clipboard_set_text (
+            DEFAULT_CLIPBOARD,
+            serialized, -1);
+          clipboard_free (clipboard);
+          g_free (serialized);
+        }
+      break;
+    default:
+      g_warning ("not implemented yet");
+      break;
     }
 }
 
@@ -1052,6 +1099,7 @@ on_clipboard_received (
     }
 
   ArrangerSelections * sel = NULL;
+  MixerSelections * mixer_sel = NULL;
   switch (clipboard->type)
     {
     case CLIPBOARD_TYPE_TIMELINE_SELECTIONS:
@@ -1059,6 +1107,9 @@ on_clipboard_received (
     case CLIPBOARD_TYPE_AUTOMATION_SELECTIONS:
     case CLIPBOARD_TYPE_CHORD_SELECTIONS:
       sel = clipboard_get_selections (clipboard);
+      break;
+    case CLIPBOARD_TYPE_MIXER_SELECTIONS:
+      mixer_sel = clipboard->mixer_sel;
       break;
     default:
       g_warn_if_reached ();
@@ -1075,7 +1126,30 @@ on_clipboard_received (
         }
       else
         {
-          g_warn_if_reached ();
+          g_message (
+            "can't paste arranger selections:\n%s",
+            text);
+          incompatible = true;
+        }
+    }
+  else if (mixer_sel)
+    {
+      ChannelSlotWidget * slot =
+        MW_MIXER->paste_slot;
+      mixer_selections_post_deserialize (mixer_sel);
+      if (mixer_selections_can_be_pasted (
+            mixer_sel, slot->track->channel,
+            slot->type, slot->slot_index))
+        {
+          mixer_selections_paste_to_slot (
+            mixer_sel, slot->track->channel,
+            slot->type, slot->slot_index);
+        }
+      else
+        {
+          g_message (
+            "can't paste mixer selections:\n%s",
+            text);
           incompatible = true;
         }
     }
@@ -1113,30 +1187,44 @@ activate_delete (
   ArrangerSelections * sel =
     project_get_arranger_selections_for_last_selection (
       PROJECT);
+  UndoableAction * ua = NULL;
 
   if (sel &&
       arranger_selections_has_any (sel) &&
       !arranger_selections_contains_undeletable_object (
         sel))
     {
-      UndoableAction * action =
+      ua =
         arranger_selections_action_new_delete (
           sel);
-      if (action)
+      if (ua)
         {
-          undo_manager_perform (
-            UNDO_MANAGER, action);
+          undo_manager_perform (UNDO_MANAGER, ua);
         }
     }
 
-  if (PROJECT->last_selection ==
-        SELECTION_TYPE_TRACKLIST)
+  switch (PROJECT->last_selection)
     {
+    case SELECTION_TYPE_TRACKLIST:
       g_message (
         "activating delete selected tracks");
       g_action_group_activate_action (
         G_ACTION_GROUP (MAIN_WINDOW),
         "delete-selected-tracks", NULL);
+      break;
+    case SELECTION_TYPE_INSERT:
+    case SELECTION_TYPE_MIDI_FX:
+      ua =
+        mixer_selections_action_new_delete (
+          MIXER_SELECTIONS);
+      if (ua)
+        {
+          undo_manager_perform (UNDO_MANAGER, ua);
+        }
+      break;
+    default:
+      g_warning ("not implemented yet");
+      break;
     }
 }
 
@@ -1173,19 +1261,46 @@ activate_clear_selection (
   ArrangerSelections * sel =
     project_get_arranger_selections_for_last_selection (
       PROJECT);
-  if (sel)
+
+  switch (PROJECT->last_selection)
     {
-      arranger_selections_clear (
-        sel, F_NO_FREE, F_PUBLISH_EVENTS);
-    }
-  else if (PROJECT->last_selection ==
-             SELECTION_TYPE_TRACKLIST)
-    {
+    case SELECTION_TYPE_TIMELINE:
+    case SELECTION_TYPE_EDITOR:
+      if (sel)
+        {
+          arranger_selections_clear (
+            sel, F_NO_FREE, F_PUBLISH_EVENTS);
+        }
+      break;
+    case SELECTION_TYPE_TRACKLIST:
       tracklist_select_all (
         TRACKLIST, F_NO_SELECT, F_PUBLISH_EVENTS);
-    }
-  else
-    {
+      break;
+    case SELECTION_TYPE_INSERT:
+    case SELECTION_TYPE_MIDI_FX:
+      {
+        Track * track =
+          tracklist_selections_get_lowest_track (
+            TRACKLIST_SELECTIONS);
+        g_return_if_fail (
+          IS_TRACK_AND_NONNULL (track));
+        if (track_type_has_channel (track->type))
+          {
+            Channel * ch =
+              track_get_channel (track);
+            PluginSlotType slot_type =
+              PLUGIN_SLOT_INSERT;
+            if (PROJECT->last_selection ==
+                  SELECTION_TYPE_MIDI_FX)
+              {
+                slot_type = PLUGIN_SLOT_MIDI_FX;
+              }
+            channel_select_all (
+              ch, slot_type, F_NO_SELECT);
+          }
+      }
+      break;
+    default:
       g_debug ("%s: doing nothing", __func__);
     }
 }
@@ -1199,19 +1314,46 @@ activate_select_all (
   ArrangerSelections * sel =
     project_get_arranger_selections_for_last_selection (
       PROJECT);
-  if (sel)
+
+  switch (PROJECT->last_selection)
     {
-      arranger_selections_select_all (
-        sel, F_PUBLISH_EVENTS);
-    }
-  else if (PROJECT->last_selection ==
-             SELECTION_TYPE_TRACKLIST)
-    {
+    case SELECTION_TYPE_TIMELINE:
+    case SELECTION_TYPE_EDITOR:
+      if (sel)
+        {
+          arranger_selections_select_all (
+            sel, F_PUBLISH_EVENTS);
+        }
+      break;
+    case SELECTION_TYPE_TRACKLIST:
       tracklist_select_all (
         TRACKLIST, F_SELECT, F_PUBLISH_EVENTS);
-    }
-  else
-    {
+      break;
+    case SELECTION_TYPE_INSERT:
+    case SELECTION_TYPE_MIDI_FX:
+      {
+        Track * track =
+          tracklist_selections_get_lowest_track (
+            TRACKLIST_SELECTIONS);
+        g_return_if_fail (
+          IS_TRACK_AND_NONNULL (track));
+        if (track_type_has_channel (track->type))
+          {
+            Channel * ch =
+              track_get_channel (track);
+            PluginSlotType slot_type =
+              PLUGIN_SLOT_INSERT;
+            if (PROJECT->last_selection ==
+                  SELECTION_TYPE_MIDI_FX)
+              {
+                slot_type = PLUGIN_SLOT_MIDI_FX;
+              }
+            channel_select_all (
+              ch, slot_type, F_SELECT);
+          }
+      }
+      break;
+    default:
       g_debug ("%s: doing nothing", __func__);
     }
 }
@@ -1405,7 +1547,7 @@ activate_create_audio_track (GSimpleAction *action,
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_AUDIO, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1418,7 +1560,7 @@ activate_create_ins_track (GSimpleAction *action,
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_INSTRUMENT, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1432,7 +1574,7 @@ activate_create_midi_track (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_MIDI, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1445,7 +1587,7 @@ activate_create_audio_bus_track (GSimpleAction *action,
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_AUDIO_BUS, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1459,7 +1601,7 @@ activate_create_midi_bus_track (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_MIDI_BUS, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1473,7 +1615,7 @@ activate_create_audio_group_track (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_AUDIO_GROUP, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1487,7 +1629,7 @@ activate_create_midi_group_track (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_MIDI_GROUP, NULL, NULL,
-      TRACKLIST->num_tracks, PLAYHEAD, 1);
+      TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
 
   undo_manager_perform (UNDO_MANAGER, ua);
 }
@@ -1690,6 +1832,74 @@ activate_unmute_selected_tracks (
   UndoableAction * ua =
     tracklist_selections_action_new_edit_mute (
       TRACKLIST_SELECTIONS, F_NO_MUTE);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_listen_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_listen (
+      TRACKLIST_SELECTIONS, F_LISTEN);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_unlisten_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_listen (
+      TRACKLIST_SELECTIONS, F_NO_LISTEN);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_enable_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_enable (
+      TRACKLIST_SELECTIONS, F_ENABLE);
+  undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+void
+activate_disable_selected_tracks (
+  GSimpleAction *action,
+  GVariant      *variant,
+  gpointer       user_data)
+{
+  if (TRACKLIST_SELECTIONS->num_tracks == 0)
+    {
+      return;
+    }
+
+  UndoableAction * ua =
+    tracklist_selections_action_new_edit_enable (
+      TRACKLIST_SELECTIONS, F_NO_ENABLE);
   undo_manager_perform (UNDO_MANAGER, ua);
 }
 
@@ -2075,6 +2285,58 @@ DEFINE_SIMPLE (activate_remove_range)
   UndoableAction * ua =
     range_action_new_remove (&start, &end);
   undo_manager_perform (UNDO_MANAGER, ua);
+}
+
+DEFINE_SIMPLE (change_state_timeline_playhead_scroll_edges)
+{
+  int enabled = g_variant_get_boolean (variant);
+
+  g_simple_action_set_state (action, variant);
+
+  g_settings_set_boolean (
+    S_UI, "timeline-playhead-scroll-edges", enabled);
+
+  EVENTS_PUSH (
+    ET_PLAYHEAD_SCROLL_MODE_CHANGED, NULL);
+}
+
+DEFINE_SIMPLE (change_state_timeline_playhead_follow)
+{
+  int enabled = g_variant_get_boolean (variant);
+
+  g_simple_action_set_state (action, variant);
+
+  g_settings_set_boolean (
+    S_UI, "timeline-playhead-follow", enabled);
+
+  EVENTS_PUSH (
+    ET_PLAYHEAD_SCROLL_MODE_CHANGED, NULL);
+}
+
+DEFINE_SIMPLE (change_state_editor_playhead_scroll_edges)
+{
+  int enabled = g_variant_get_boolean (variant);
+
+  g_simple_action_set_state (action, variant);
+
+  g_settings_set_boolean (
+    S_UI, "editor-playhead-scroll-edges", enabled);
+
+  EVENTS_PUSH (
+    ET_PLAYHEAD_SCROLL_MODE_CHANGED, NULL);
+}
+
+DEFINE_SIMPLE (change_state_editor_playhead_follow)
+{
+  int enabled = g_variant_get_boolean (variant);
+
+  g_simple_action_set_state (action, variant);
+
+  g_settings_set_boolean (
+    S_UI, "editor-playhead-follow", enabled);
+
+  EVENTS_PUSH (
+    ET_PLAYHEAD_SCROLL_MODE_CHANGED, NULL);
 }
 
 /**

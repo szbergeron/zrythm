@@ -377,6 +377,53 @@ Args:
                  "The last version that received a 'new version has been released' notification.")
              ))) ;; general
 
+         ;; Monitor schema
+         (schema-print
+           (make-schema
+             "monitor"
+             (list
+               (make-schema-key-with-range
+                 "monitor-vol" "d"
+                 "0.0" "2.0" "1.0"
+                 "Monitor volume"
+                 "The monitor volume in amplitude (0 to 2).")
+               (make-schema-key-with-range
+                 "mute-vol" "d"
+                 "0.0" "0.5" "0.0"
+                 "Mute volume"
+                 "The monitor mute volume in amplitude (0 to 2).")
+               (make-schema-key-with-range
+                 "listen-vol" "d"
+                 "0.5" "2.0" "1.0"
+                 "Listen volume"
+                 "The monitor listen volume in amplitude (0 to 2).")
+               (make-schema-key-with-range
+                 "dim-vol" "d"
+                 "0.0" "0.5" "0.1"
+                 "Dim volume"
+                 "The monitor dim volume in amplitude (0 to 2).")
+               (make-schema-key
+                 "mono" "b" "false"
+                 "Sum to mono"
+                 "Whether to sum the monitor signal to mono.")
+               (make-schema-key
+                 "dim-output" "b" "false"
+                 "Dim output"
+                 "Whether to dim the the monitor signal.")
+               (make-schema-key
+                 "mute" "b" "false"
+                 "Mute"
+                 "Whether to mute the monitor signal.")
+               (make-schema-key
+                 "l-devices" "as" "[]"
+                 "Left output devices"
+                 "A list of output devices to route the left monitor output to.")
+               (make-schema-key
+                 "r-devices" "as" "[]"
+                 "Left output devices"
+                 "A list of output devices to route the right monitor output to.")
+             ))) ;; monitor
+
          ;; UI schema
          (schema-print
            (make-schema
@@ -386,6 +433,10 @@ Args:
                  "bounce-with-parents" "b" "true"
                  "Bounce with parents"
                  "Whether to bounce with parent tracks (direct outputs).")
+               (make-schema-key
+                 "disable-after-bounce" "b" "false"
+                 "Disable after bounce"
+                 "Disable track after bouncing.")
                (make-schema-key-with-enum
                  "bounce-step"
                  "bounce-step" "post-fader"
@@ -523,11 +574,6 @@ Args:
                  "false"
                  "Editor event viewer visibility"
                  "Whether the editor event viewer is visible or not.")
-               (make-schema-key-with-range
-                 "monitor-out-vol" "d"
-                 "0.0" "2.0" "1.0"
-                 "Monitor out volume"
-                 "The monitor out volume in amplitude (0 to 2).")
                (make-schema-key-with-enum
                  "transport-display"
                  "transport-display" "bbt"
@@ -560,6 +606,26 @@ Args:
                  "audio-function" "i" "0"
                  "Last used audio function"
                  "Last used audio function (index corresponding to enum in audio function action).")
+               (make-schema-key
+                 "timeline-playhead-scroll-edges" "b"
+                 "true"
+                 "Playhead scroll edges (timeline)"
+                 "Whether to scroll when the playhead reaches the visible edge (timeline).")
+               (make-schema-key
+                 "timeline-playhead-follow" "b"
+                 "false"
+                 "Follow playhead (timeline)"
+                 "Whether to follow the playhead. When this is on, the visible area will stay centered on the playhead (timeline).")
+               (make-schema-key
+                 "editor-playhead-scroll-edges" "b"
+                 "true"
+                 "Playhead scroll edges (editor)"
+                 "Whether to scroll when the playhead reaches the visible edge (editor).")
+               (make-schema-key
+                 "editor-playhead-follow" "b"
+                 "false"
+                 "Follow playhead (editor)"
+                 "Whether to follow the playhead. When this is on, the visible area will stay centered on the playhead (editor).")
              ))) ;; ui
 
          (schema-print
@@ -899,6 +965,16 @@ Args:
                      "en"
                      "User interface language"
                      "The language to use for the user interface.")
+                   (make-schema-key
+                     "css-theme" "s"
+                     "zrythm-theme.css"
+                     "CSS theme"
+                     "The CSS theme to use.")
+                   (make-schema-key
+                     "icon-theme" "s"
+                     "zrythm-dark"
+                     "Icon theme"
+                     "The icon theme to use. This is the directory name.")
                  )) ;; ui/general
              ))) ;; ui
 

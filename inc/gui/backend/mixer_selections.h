@@ -146,15 +146,32 @@ int
 mixer_selections_get_lowest_slot (
   MixerSelections * ms);
 
+void
+mixer_selections_post_deserialize (
+  MixerSelections * self);
+
+/**
+ * Returns whether the selections can be pasted to
+ * MixerWidget.paste_slot.
+ */
+NONNULL
+bool
+mixer_selections_can_be_pasted (
+  MixerSelections * self,
+  Channel *         ch,
+  PluginSlotType    type,
+  int               slot);
+
 /**
  * Paste the selections starting at the slot in the
  * given channel.
  */
+NONNULL
 void
 mixer_selections_paste_to_slot (
-  MixerSelections * ts,
+  MixerSelections * ms,
   Channel *         ch,
-  PluginSlotType   type,
+  PluginSlotType    type,
   int               slot);
 
 /**
@@ -206,18 +223,20 @@ mixer_selections_add_slot (
  * Assumes that the channel is the one already
  * selected.
  */
+NONNULL
 void
 mixer_selections_remove_slot (
   MixerSelections * ms,
   int               slot,
   PluginSlotType    type,
-  int               publish_events);
+  bool              publish_events);
 
 /**
  * Sorts the selections by slot index.
  *
  * @param asc Ascending or not.
  */
+NONNULL
 void
 mixer_selections_sort (
   MixerSelections * self,
@@ -227,13 +246,20 @@ mixer_selections_sort (
  * Returns the first selected plugin if any is
  * selected, otherwise NULL.
  */
+NONNULL
 Plugin *
 mixer_selections_get_first_plugin (
+  MixerSelections * self);
+
+NONNULL
+bool
+mixer_selections_validate (
   MixerSelections * self);
 
 /**
  * Clears selections.
  */
+NONNULL
 void
 mixer_selections_clear (
   MixerSelections * ms,

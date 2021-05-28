@@ -48,7 +48,7 @@
 #include "plugins/lv2/lv2_ui.h"
 #include "utils/arrays.h"
 #include "utils/dsp.h"
-#include "utils/err_codes.h"
+#include "utils/error.h"
 #include "utils/flags.h"
 #include "utils/math.h"
 #include "utils/mem.h"
@@ -242,8 +242,7 @@ port_init_loaded (
     case TYPE_EVENT:
       if (!self->midi_events)
         {
-          self->midi_events =
-            midi_events_new (self);
+          self->midi_events = midi_events_new ();
         }
       if (!self->midi_ring)
         {
@@ -711,10 +710,26 @@ port_find_from_identifier (
       break;
     case PORT_OWNER_TYPE_HW:
       {
-        Port * port =
-          hardware_processor_find_port (
-            HW_IN_PROCESSOR, id->ext_port_id);
+        Port * port = NULL;
+
+        /* note: flows are reversed */
+        if (id->flow == FLOW_OUTPUT)
+          {
+            port =
+              hardware_processor_find_port (
+                HW_IN_PROCESSOR, id->ext_port_id);
+          }
+        else if (id->flow == FLOW_INPUT)
+          {
+            port =
+              hardware_processor_find_port (
+                HW_OUT_PROCESSOR, id->ext_port_id);
+          }
+
+        /* only warn when hardware is not
+         * connected anymore */
         g_warn_if_fail (port);
+        /*g_return_val_if_fail (port, NULL);*/
         return port;
       }
       break;
@@ -808,15 +823,14 @@ port_new_with_type (
 
   self->id.type = type;
   if (self->id.type == TYPE_EVENT)
-    self->midi_events = midi_events_new (self);
+    self->midi_events = midi_events_new ();
   self->id.flow = flow;
 
   switch (type)
     {
     case TYPE_EVENT:
       self->maxf = 1.f;
-      self->midi_events =
-        midi_events_new (self);
+      self->midi_events = midi_events_new ();
       self->midi_ring =
         zix_ring_new (
           sizeof (MidiEvent) * (size_t) 11);
@@ -1228,6 +1242,7 @@ expose_to_jack (
         "unexposing port %s from JACK", label);
       if (AUDIO_ENGINE->client)
         {
+          g_warn_if_fail (self->data);
           int ret =
             jack_port_unregister (
               AUDIO_ENGINE->client,
@@ -1427,6 +1442,17 @@ port_get_all (
        i < HW_IN_PROCESSOR->num_midi_ports; i++)
     {
       _ADD (HW_IN_PROCESSOR->midi_ports[i]);
+    }
+
+  for (int i = 0;
+       i < HW_OUT_PROCESSOR->num_audio_ports; i++)
+    {
+      _ADD (HW_OUT_PROCESSOR->audio_ports[i]);
+    }
+  for (int i = 0;
+       i < HW_OUT_PROCESSOR->num_midi_ports; i++)
+    {
+      _ADD (HW_OUT_PROCESSOR->midi_ports[i]);
     }
 
   for (int i = 0; i < TRACKLIST->num_tracks; i++)
@@ -2048,6 +2074,7 @@ port_update_identifier (
           Port * src = self->srcs[i];
           int dest_idx =
             port_get_dest_index (src, self);
+          g_return_if_fail (dest_idx >= 0);
           port_identifier_copy (
             &src->dest_ids[dest_idx], &self->id);
           g_warn_if_fail (
@@ -2060,6 +2087,7 @@ port_update_identifier (
           Port * dest = self->dests[i];
           int src_idx =
             port_get_src_index (dest, self);
+          g_return_if_fail (src_idx >= 0);
           port_identifier_copy (
             &dest->src_ids[src_idx], &self->id);
           g_warn_if_fail (
@@ -2374,7 +2402,8 @@ port_sum_data_from_rtmidi (
         }
     }
 
-  if (self->midi_events->num_events > 0)
+  if (DEBUGGING &&
+      self->midi_events->num_events > 0)
     {
       MidiEvent * ev =
         &self->midi_events->events[0];
@@ -4059,6 +4088,38 @@ port_rename_backend (
     default:
       break;
     }
+}
+
+/**
+ * If MIDI port, returns if there are any events,
+ * if audio port, returns if there is sound in the
+ * buffer.
+ */
+bool
+port_has_sound (
+  Port * self)
+{
+  switch (self->id.type)
+    {
+    case TYPE_AUDIO:
+      g_return_val_if_fail (self->buf, false);
+      for (nframes_t i = 0;
+           i < AUDIO_ENGINE->block_length; i++)
+        {
+          if (fabsf (self->buf[i]) > 0.0000001f)
+            {
+              return true;
+            }
+        }
+      break;
+    case TYPE_EVENT:
+      /* TODO */
+      break;
+    default:
+      break;
+    }
+
+  return false;
 }
 
 /**

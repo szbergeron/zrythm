@@ -140,6 +140,7 @@ audio_function_apply (
       break;
     }
 
+#if 0
   char * tmp =
     g_strdup_printf (
       "%s - %s - %s",
@@ -149,17 +150,18 @@ audio_function_apply (
   /* remove dots from name */
   char * name = string_replace (tmp, ".", "_");
   g_free (tmp);
+#endif
 
   AudioClip * clip =
     audio_clip_new_from_float_array (
       &frames[0], (long) num_frames,
-      channels, name);
-  g_free (name);
+      channels, BIT_DEPTH_32, orig_clip->name);
   audio_pool_add_clip (AUDIO_POOL, clip);
   g_message (
     "writing %s to pool (id %d)",
     clip->name, clip->pool_id);
-  audio_clip_write_to_pool (clip, false);
+  audio_clip_write_to_pool (
+    clip, false, F_NOT_BACKUP);
 
   audio_sel->pool_id = clip->pool_id;
 

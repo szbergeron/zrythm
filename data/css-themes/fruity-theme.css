@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2018-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2018-2021 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2021 Bastien Vergand
  *
  * This file is part of Zrythm
  *
@@ -23,20 +24,20 @@
  * These can be fetched with
  * gtk_style_context_lookup_color().
  */
-@define-color bg_color #2D2D2D;
-@define-color bg_dark_variant1 #262626;
-@define-color bg_dark_variant2 #1F1F1F;
-@define-color bg_darker_variant1 #202020;
-@define-color bg_darker_variant2 #121212;
-@define-color bg_light_variant1 #3A3A3A;
-@define-color bg_light_variant2 #343434;
-@define-color bg_lighter_variant1 #444444;
-@define-color bg_lighter_variant2 #393939;
+@define-color bg_color #50595e;
+@define-color bg_dark_variant1 #242c31;
+@define-color bg_dark_variant2 #434c51;
+@define-color bg_darker_variant1 #2b3337;
+@define-color bg_darker_variant2 #3e464b;
+@define-color bg_light_variant1 #50595e;
+@define-color bg_light_variant2 #596267;
+@define-color bg_lighter_variant1 #5f686d;
+@define-color bg_lighter_variant2 #7a8186;
 @define-color dark_variant1 #000000;
 @define-color dark_variant2 #030202;
 @define-color light_variant1 #656464;
 @define-color light_variant2 #989797;
-@define-color bright_green #1DDD6A;
+@define-color bright_green #1DD169;
 @define-color darkish_green #19664c;
 @define-color dark_orange #D68A0C;
 @define-color darker_orange #D8690B;
@@ -387,7 +388,7 @@ modulator-view two-col-expander-box
   border-width: 2px;
   border-radius: 6px;
   /* FIXME use predefined colors */
-  border-color: #555555;
+  border-color: #2d363b;
 }
 
 /* curve the bottom edges of the fader section
@@ -425,7 +426,7 @@ channel expander-box
   border-width: 2px;
   border-radius: 8px;
   /* FIXME use predefined colors */
-  border-color: #BBBBBB;
+  border-color: #69bcea;
 }
 
 channel button.flat

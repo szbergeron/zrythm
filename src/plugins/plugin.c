@@ -55,7 +55,7 @@
 #include "utils/arrays.h"
 #include "utils/dialogs.h"
 #include "utils/dsp.h"
-#include "utils/err_codes.h"
+#include "utils/error.h"
 #include "utils/gtk.h"
 #include "utils/io.h"
 #include "utils/flags.h"
@@ -199,11 +199,16 @@ plugin_init_loaded (
 
   if (project)
     {
+      bool was_enabled =
+        plugin_is_enabled (self, false);
       int ret =
         plugin_instantiate (self, project, NULL);
       if (ret == 0)
         {
           plugin_activate (self, true);
+
+          plugin_set_enabled (
+            self, was_enabled, F_NO_PUBLISH_EVENTS);
         }
       else
         {
@@ -434,6 +439,8 @@ plugin_set_selected_preset_from_index (
   Plugin * self,
   int      idx)
 {
+  g_return_if_fail (self->instantiated);
+
   self->selected_preset.idx = idx;
 
   g_message (
@@ -442,6 +449,8 @@ plugin_set_selected_preset_from_index (
   if (self->setting->open_with_carla)
     {
 #ifdef HAVE_CARLA
+      g_return_if_fail (self->carla->host_handle);
+
       /* if init preset */
       if (self->selected_bank.bank_idx == 0 &&
           idx == 0)
@@ -1102,6 +1111,7 @@ plugin_activate (
       (!pl->activated && !activate))
     {
       /* nothing to do */
+      g_message ("%s: nothing to do", __func__);
       return 0;
     }
 
@@ -1111,6 +1121,11 @@ plugin_activate (
         "plugin %s not instantiated",
         pl->setting->descr->name);
       return -1;
+    }
+
+  if (!activate)
+    {
+      pl->deactivating = true;
     }
 
   if (pl->setting->open_with_carla)
@@ -1141,6 +1156,7 @@ plugin_activate (
     }
 
   pl->activated = activate;
+  pl->deactivating = false;
 
   return 0;
 }
@@ -1162,11 +1178,8 @@ plugin_cleanup (
         {
 #ifdef HAVE_CARLA
 #if 0
-          /* TODO */
-          int ret =
-            carla_native_plugin_cleanup (
-              self->carla, activate);
-          g_return_val_if_fail (ret == 0, ret);
+          carla_native_plugin_close (
+            self->carla);
 #endif
 #endif
         }
@@ -1289,9 +1302,11 @@ plugin_move_automation (
 {
   g_message (
     "moving plugin '%s' automation from "
-    "%s to %s -> slot#%d",
+    "%s to %s -> %s:%d",
     pl->setting->descr->name, prev_track->name,
-    track->name, new_slot);
+    track->name,
+    plugin_slot_type_strings[new_slot_type].str,
+    new_slot);
 
   AutomationTracklist * prev_atl =
     track_get_automation_tracklist (prev_track);
@@ -1618,9 +1633,13 @@ plugin_instantiate (
                 pl->instantiated = true;
               }
             g_warn_if_fail (pl->lv2->instance);
-            /* save the state */
-            lv2_state_save_to_file (
-              pl->lv2, F_NOT_BACKUP);
+
+            if (!pl->state_dir)
+              {
+                /* save the state */
+                lv2_state_save_to_file (
+                  pl->lv2, F_NOT_BACKUP);
+              }
           }
           break;
         default:
@@ -1670,7 +1689,7 @@ plugin_process (
   const nframes_t  local_offset,
   const nframes_t nframes)
 {
-  if (!plugin_is_enabled (plugin) &&
+  if (!plugin_is_enabled (plugin, true) &&
       !plugin->own_enabled_port)
     {
       plugin_process_passthrough (
@@ -1766,16 +1785,44 @@ plugin_process (
 }
 
 /**
+ * Prints the plugin to the buffer, if any, or to
+ * the log.
+ */
+void
+plugin_print (
+  Plugin * self,
+  char *   buf,
+  size_t   buf_sz)
+{
+  const char * fmt = "%s (%d):%s:%d - %s";
+  if (buf)
+    {
+      Track * track =
+        self->is_project ?
+          plugin_get_track (self) : NULL;
+      snprintf (
+        buf, buf_sz, fmt,
+        track ? track->name : "<no track>",
+        track ? track->pos : -1,
+        plugin_slot_type_strings[
+          self->id.slot_type].str,
+        self->id.slot, self->setting->descr->name);
+    }
+}
+
+/**
  * Shows plugin ui and sets window close callback
  */
 void
 plugin_open_ui (
   Plugin * self)
 {
-  g_debug ("opening plugin UI");
-
   g_return_if_fail (
     IS_PLUGIN (self) && self->setting->descr);
+
+  char pl_str[700];
+  plugin_print (self, pl_str, 700);
+  g_debug ("opening plugin UI [%s]", pl_str);
 
   PluginSetting * setting = self->setting;
   const PluginDescriptor * descr = setting->descr;
@@ -1785,7 +1832,7 @@ plugin_open_ui (
       g_message (
         "plugin %s instantiation failed, no UI to "
         "open",
-        descr->name);
+        pl_str);
       return;
     }
 
@@ -1823,8 +1870,13 @@ plugin_open_ui (
   if (GTK_IS_WINDOW (self->window))
     {
       /* present it */
+      g_debug (
+        "presenting plugin [%s] window %p",
+        pl_str, self->window);
       gtk_window_present (
         GTK_WINDOW (self->window));
+      gtk_widget_show_all (
+        GTK_WIDGET (self->window));
     }
   else
     {
@@ -1834,6 +1886,8 @@ plugin_open_ui (
        * then LV2 custom */
       if (generic_ui)
         {
+          g_debug (
+            "creating and opening generic UI");
           plugin_gtk_create_window (self);
           plugin_gtk_open_generic_ui (self);
         }
@@ -1990,6 +2044,10 @@ plugin_clone (
   bool     src_is_project)
 {
   g_return_val_if_fail (IS_PLUGIN (pl), NULL);
+
+  char buf[800];
+  plugin_print (pl, buf, 800);
+  g_debug ("cloning plugin %s", buf);
 
   Plugin * clone = NULL;
 #ifdef HAVE_CARLA
@@ -2148,12 +2206,28 @@ plugin_clone (
 
 /**
  * Returns whether the plugin is enabled.
+ *
+ * @param check_track Whether to check if the track
+ *   is enabled as well.
  */
 bool
 plugin_is_enabled (
-  Plugin * self)
+  Plugin * self,
+  bool     check_track)
 {
-  return control_port_is_toggled (self->enabled);
+  if (!control_port_is_toggled (self->enabled))
+    return false;
+
+  if (check_track)
+    {
+      Track * track = plugin_get_track (self);
+      g_return_val_if_fail (track, false);
+      return track_is_enabled (track);
+    }
+  else
+    {
+      return true;
+    }
 }
 
 void
@@ -2162,6 +2236,8 @@ plugin_set_enabled (
   bool     enabled,
   bool     fire_events)
 {
+  g_return_if_fail (self->instantiated);
+
   port_set_control_value (
     self->enabled, enabled ? 1.f : 0.f, false,
     fire_events);
@@ -2264,6 +2340,8 @@ plugin_close_ui (
         self->setting->descr->name);
       return;
     }
+
+  g_return_if_fail (self->instantiated);
 
   plugin_gtk_close_ui (self);
 
@@ -2937,7 +3015,7 @@ plugin_get_port_by_symbol (
         }
     }
 
-  g_critical (
+  g_warning (
     "failed to find port with symbol %s", sym);
   return NULL;
 }

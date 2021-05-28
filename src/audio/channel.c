@@ -453,8 +453,7 @@ channel_init_loaded (
     {
     case TYPE_EVENT:
       self->midi_out->midi_events =
-        midi_events_new (
-          self->midi_out);
+        midi_events_new ();
       self->midi_out->id.owner_type =
         PORT_OWNER_TYPE_TRACK;
       break;
@@ -1243,8 +1242,13 @@ channel_append_all_ports (
 static void
 init_stereo_out_ports (
   Channel * self,
-  int       loading)
+  bool      loading)
 {
+  if (loading)
+    {
+      return;
+    }
+
   char str[80];
   strcpy (str, "Stereo out");
   Port * l, * r;
@@ -1252,24 +1256,16 @@ init_stereo_out_ports (
     &self->stereo_out;
   PortFlow flow = FLOW_OUTPUT;
 
-  if (loading)
-    {
-      l = NULL;
-      r = NULL;
-    }
-  else
-    {
-      strcat (str, " L");
-      l = port_new_with_type (
-        TYPE_AUDIO, flow, str);
+  strcat (str, " L");
+  l = port_new_with_type (
+    TYPE_AUDIO, flow, str);
 
-      str[10] = '\0';
-      strcat (str, " R");
-      r = port_new_with_type (
-        TYPE_AUDIO,
-        flow,
-        str);
-    }
+  str[10] = '\0';
+  strcat (str, " R");
+  r = port_new_with_type (
+    TYPE_AUDIO,
+    flow,
+    str);
 
   port_set_owner_track_from_channel (l, self);
   port_set_owner_track_from_channel (r, self);
@@ -1630,8 +1626,9 @@ channel_remove_plugin (
   Track * track = channel_get_track (channel);
   g_return_if_fail (IS_TRACK_AND_NONNULL (track));
   g_message (
-    "Removing %s from %s:%d",
-    plugin->setting->descr->name, track->name, slot);
+    "Removing %s from %s:%s:%d",
+    plugin->setting->descr->name, track->name,
+    plugin_slot_type_strings[slot_type].str, slot);
 
   /* if moving, the move is already handled in
    * plugin_move_automation() inside
@@ -1753,8 +1750,8 @@ channel_add_plugin (
   Track * track = channel_get_track (self);
   g_return_val_if_fail (
     IS_TRACK_AND_NONNULL (track), 0);
-  int prev_active = track->active;
-  track->active = 0;
+  bool prev_enabled = track->enabled;
+  track->enabled = false;
 
   Plugin ** plugins = NULL;
   switch (slot_type)
@@ -1811,9 +1808,10 @@ channel_add_plugin (
     }
 
   g_message (
-    "Inserting %s %s at %s:%d",
+    "Inserting %s %s at %s:%s:%d",
     plugin_slot_type_to_string (slot_type),
-    plugin->setting->descr->name, track->name, slot);
+    plugin->setting->descr->name, track->name,
+    plugin_slot_type_strings[slot_type].str, slot);
   if (slot_type == PLUGIN_SLOT_INSTRUMENT)
     {
       self->instrument = plugin;
@@ -1935,7 +1933,7 @@ channel_add_plugin (
         self, prev_pl, plugin, next_pl);
     }
 
-  track->active = prev_active;
+  track->enabled = prev_enabled;
 
   if (gen_automatables)
     {
@@ -2172,6 +2170,51 @@ channel_clone (
   return clone;
 }
 
+/**
+ * Selects/deselects all plugins in the given slot
+ * type.
+ */
+void
+channel_select_all (
+  Channel *      self,
+  PluginSlotType type,
+  bool           select)
+{
+  mixer_selections_clear (
+    MIXER_SELECTIONS, F_PUBLISH_EVENTS);
+  if (!select)
+    return;
+
+  switch (type)
+    {
+    case PLUGIN_SLOT_INSERT:
+      for (int i = 0; i < STRIP_SIZE; i++)
+        {
+          if (self->inserts[i])
+            {
+              plugin_select (
+                self->inserts[i], F_SELECT,
+                F_NOT_EXCLUSIVE);
+            }
+        }
+      break;
+    case PLUGIN_SLOT_MIDI_FX:
+      for (int i = 0; i < STRIP_SIZE; i++)
+        {
+          if (self->midi_fx[i])
+            {
+              plugin_select (
+                self->midi_fx[i], F_SELECT,
+                F_NOT_EXCLUSIVE);
+            }
+        }
+      break;
+    default:
+      g_warning ("not implemented");
+      break;
+    }
+}
+
 int
 channel_get_plugins (
   Channel * ch,
@@ -2257,7 +2300,8 @@ channel_disconnect (
     {
       Track * out_track =
         channel_get_output_track (self);
-      g_warn_if_fail (IS_TRACK (out_track));
+      g_return_if_fail (
+        IS_TRACK_AND_NONNULL (out_track));
       group_target_track_remove_child (
         out_track, self->track_pos, F_DISCONNECT,
         F_NO_RECALC_GRAPH, F_NO_PUBLISH_EVENTS);

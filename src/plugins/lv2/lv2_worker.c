@@ -46,7 +46,7 @@ lv2_worker_respond (
   uint32_t                  size,
   const void*               data)
 {
-  LV2_Worker* worker = (LV2_Worker*)handle;
+  Lv2Worker* worker = (Lv2Worker*)handle;
   zix_ring_write (
     worker->responses, (const char*)&size,
     sizeof(size));
@@ -55,10 +55,14 @@ lv2_worker_respond (
   return LV2_WORKER_SUCCESS;
 }
 
+/**
+ * Worker logic running in a separate thread (if
+ * worker is threaded).
+ */
 static void*
 worker_func (void* data)
 {
-  LV2_Worker* worker = (LV2_Worker*)data;
+  Lv2Worker* worker = (Lv2Worker*)data;
   Lv2Plugin*       plugin   = worker->plugin;
   void*       buf    = NULL;
   while (true) {
@@ -68,20 +72,31 @@ worker_func (void* data)
     }
 
     uint32_t size = 0;
-    zix_ring_read(worker->requests, (char*)&size, sizeof(size));
+    zix_ring_read (
+      worker->requests, (char*)&size, sizeof(size));
 
-    if (!(buf = realloc(buf, size))) {
-      fprintf(stderr, "error: realloc() failed\n");
-      free(buf);
+    if (!(buf = realloc (buf, size))) {
+      g_warning ("error: realloc() failed");
+      free (buf);
       return NULL;
     }
 
-    zix_ring_read(worker->requests, (char*)buf, size);
+    zix_ring_read (
+      worker->requests, (char*)buf, size);
 
-    zix_sem_wait(&plugin->work_lock);
-    worker->iface->work(
-      plugin->instance->lv2_handle, lv2_worker_respond, worker, size, buf);
-    zix_sem_post(&plugin->work_lock);
+    zix_sem_wait (&plugin->work_lock);
+    char pl_str[700];
+    plugin_print (plugin->plugin, pl_str, 700);
+    if (DEBUGGING)
+      {
+        g_debug (
+          "running work (threaded) for plugin %s",
+          pl_str);
+      }
+    worker->iface->work (
+      plugin->instance->lv2_handle,
+      lv2_worker_respond, worker, size, buf);
+    zix_sem_post (&plugin->work_lock);
   }
 
   free(buf);
@@ -91,7 +106,7 @@ worker_func (void* data)
 void
 lv2_worker_init (
   Lv2Plugin*                   plugin,
-  LV2_Worker*                  worker,
+  Lv2Worker*                  worker,
   const LV2_Worker_Interface * iface,
   bool                         threaded)
 {
@@ -113,8 +128,11 @@ lv2_worker_init (
   zix_ring_mlock (worker->responses);
 }
 
+/**
+ * Stops the worker and frees resources.
+ */
 void
-lv2_worker_finish(LV2_Worker* worker)
+lv2_worker_finish(Lv2Worker* worker)
 {
   if (worker->requests) {
     if (worker->threaded) {
@@ -127,24 +145,37 @@ lv2_worker_finish(LV2_Worker* worker)
   }
 }
 
+/**
+ * Called from plugins during run() to request that
+ * Zrythm calls the work() method in a non-realtime
+ * context with the given arguments.
+ */
 LV2_Worker_Status
 lv2_worker_schedule (
   LV2_Worker_Schedule_Handle handle,
   uint32_t                   size,
   const void*                data)
 {
-  LV2_Worker * worker = (LV2_Worker *) handle;
+  Lv2Worker * worker = (Lv2Worker *) handle;
   Lv2Plugin * plugin = worker->plugin;
   if (!worker->threaded ||
       AUDIO_ENGINE->exporting)
     {
       /* Execute work immediately in this thread */
       zix_sem_wait (&plugin->work_lock);
+      char pl_str[700];
+      plugin_print (plugin->plugin, pl_str, 700);
       if (!worker->iface)
         {
-          g_warning ("Worker interface is NULL");
+          g_warning (
+            "Worker interface for %s is NULL",
+            pl_str);
           return LV2_WORKER_ERR_UNKNOWN;
         }
+      g_debug (
+        "running work (threaded %d) immediately "
+        "for plugin %s",
+        worker->threaded, pl_str);
       worker->iface->work (
         plugin->instance->lv2_handle,
         lv2_worker_respond, worker, size, data);
@@ -164,9 +195,15 @@ lv2_worker_schedule (
   return LV2_WORKER_SUCCESS;
 }
 
+/**
+ * Called during run() to process worker replies.
+ *
+ * Internally calls work_response in
+ * https://lv2plug.in/doc/html/group__worker.html.
+ */
 void
 lv2_worker_emit_responses (
-  LV2_Worker* worker,
+  Lv2Worker* worker,
   LilvInstance* instance)
 {
   if (worker->responses)

@@ -12,8 +12,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2021-04-25 05:03+0100\n"
-"PO-Revision-Date: 2021-01-05 14:29+0000\n"
+"POT-Creation-Date: 2021-05-17 17:28+0100\n"
+"PO-Revision-Date: 2021-05-10 16:32+0000\n"
 "Last-Translator: ssantos <ssantos@web.de>\n"
 "Language: pt\n"
 "Language-Team: Portuguese <https://hosted.weblate.org/projects/zrythm"
@@ -959,9 +959,10 @@ msgstr ""
 "<https://redmine.zrythm.org/projects/zrythm/issues>`_."
 
 #: ../../contributing/intro.rst:39
+#, fuzzy
 msgid ""
 "The latest development branch for new features is ``development`` in our "
-"`git repository <https://git.zrythm.org/cgit/zrythm>`_."
+"`git repository <https://git.zrythm.org/zrythm/zrythm>`_."
 msgstr ""
 "O último ramo de desenvolvimento de novas funcionalidades é o "
 "``desenvolvimento`` no nosso repositório \"git\" "
@@ -3270,6 +3271,7 @@ msgstr ""
 "fonte para instruções de instalação."
 
 #: ../../getting-started/installation.rst:36
+#: ../../getting-started/system-requirements.rst:52
 msgid "GNU/Linux"
 msgstr "GNU/Linux"
 
@@ -3318,6 +3320,7 @@ msgid "The installers above fully support Windows 64bit and MacOS."
 msgstr "Os instaladores acima suportam totalmente o Windows 64bit e MacOS."
 
 #: ../../getting-started/installation.rst:58
+#: ../../getting-started/system-requirements.rst:57
 msgid "FreeBSD"
 msgstr "FreeBSD"
 
@@ -3583,18 +3586,24 @@ msgid ""
 " by the kernel, causing xruns when attempting to access the data."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:51
+#: ../../getting-started/system-requirements.rst:53
 msgid ""
 "To set up these privileges for your user, see `How do I configure my "
 "linux system to allow JACK to use realtime scheduling? "
 "<https://jackaudio.org/faq/linux_rt_config.html#systems-using-pam>`_."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:55
+#: ../../getting-started/system-requirements.rst:58
+msgid ""
+"To set up these privileges for your user, change the user class' "
+"``memorylocked`` value in :file:`/etc/login.conf`."
+msgstr ""
+
+#: ../../getting-started/system-requirements.rst:63
 msgid "Open File Limit"
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:56
+#: ../../getting-started/system-requirements.rst:64
 msgid ""
 "On startup, Zrythm will attempt to increase the maximum limit of files it"
 " can open. You should give your user enough permissions to allow this."
@@ -3952,7 +3961,7 @@ msgstr ""
 "*É concedida permissão para copiar, distribuir e/ou modificar este "
 "documento sob os termos da GNU Free Documentation License, Versão 1.3 ou "
 "qualquer versão posterior publicada pela Free Software Foundation; com as"
-" Seções Invariantes sendo apenas \"Créditos\", sem textos de capa frontal"
+" Seções Invariantes a ser apenas \"Créditos\", sem textos de capa frontal"
 " e sem textos de capa traseira.  Uma cópia da licença está incluída na "
 "subsecção intitulada \"GNU Free Documentation License\" na secção "
 "intitulada \"Apêndice\".*"

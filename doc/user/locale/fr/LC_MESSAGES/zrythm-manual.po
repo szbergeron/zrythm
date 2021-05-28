@@ -13,8 +13,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2021-04-25 05:03+0100\n"
-"PO-Revision-Date: 2021-04-04 15:26+0000\n"
+"POT-Creation-Date: 2021-05-17 17:28+0100\n"
+"PO-Revision-Date: 2021-05-02 17:32+0000\n"
 "Last-Translator: Olivier Humbert <trebmuh@tuxfamily.org>\n"
 "Language: fr\n"
 "Language-Team: French <https://hosted.weblate.org/projects/zrythm/user-"
@@ -27,7 +27,7 @@ msgstr ""
 
 #: ../../appendix/environment.rst:10
 msgid "Environment Variables"
-msgstr ""
+msgstr "Variables d'environnement"
 
 #: ../../appendix/environment.rst:12
 msgid ""
@@ -44,7 +44,7 @@ msgstr ""
 
 #: ../../appendix/environment.rst:25
 msgid "Example: ``LV2_PATH=$HOME/custom-lv2-dir``"
-msgstr ""
+msgstr "Exemple : ``LV2_PATH=$HOME/dossier-lv2-personnalisé``"
 
 #: ../../appendix/environment.rst:30
 msgid "Set to 1 to disable plugin scanning."
@@ -52,11 +52,13 @@ msgstr ""
 
 #: ../../appendix/environment.rst:32
 msgid "Example: ``NO_SCAN_PLUGINS=1``"
-msgstr ""
+msgstr "Exemple : ``NO_SCAN_PLUGINS=1``"
 
 #: ../../appendix/environment.rst:37
 msgid "Set this to the locations to scan for :term:`VST2` plugins."
 msgstr ""
+"Paramétrer ceci sur les emplacements à rechercher pour les greffons "
+":term:`VST2`."
 
 #: ../../appendix/environment.rst:42
 msgid "Set this to the locations to scan for :term:`VST3` plugins."
@@ -65,18 +67,22 @@ msgstr ""
 #: ../../appendix/environment.rst:47
 msgid "Number of DSP threads to use. Defaults to number of CPU cores - 1."
 msgstr ""
+"Nombre de threads DSP à utiliser. La valeur par défaut est le nombre de "
+"cœurs du CPU - 1."
 
 #: ../../appendix/environment.rst:52
 msgid "Set to 1 to show extra information useful for developers."
 msgstr ""
+"Paramétrer à 1 pour afficher des informations additionnelles utiles pour "
+"les développeurs."
 
 #: ../../appendix/files-and-directories.rst:6
 msgid "Files and Directories"
-msgstr ""
+msgstr "Fichiers et répertoires"
 
 #: ../../appendix/files-and-directories.rst:9
 msgid "User path"
-msgstr ""
+msgstr "Chemin utilisateur"
 
 #: ../../appendix/files-and-directories.rst:10
 msgid ""
@@ -1015,9 +1021,10 @@ msgstr ""
 "#-#-#-#-#  zrythm-manual.po (PROJECT VERSION)  #-#-#-#-#\n"
 
 #: ../../contributing/intro.rst:39
+#, fuzzy
 msgid ""
 "The latest development branch for new features is ``development`` in our "
-"`git repository <https://git.zrythm.org/cgit/zrythm>`_."
+"`git repository <https://git.zrythm.org/zrythm/zrythm>`_."
 msgstr ""
 "La dernière branche de développement pour les nouvelles fonctionnalités "
 "est ``development`` dans notre `dépôt git "
@@ -3555,6 +3562,7 @@ msgid ""
 msgstr ""
 
 #: ../../getting-started/installation.rst:36
+#: ../../getting-started/system-requirements.rst:52
 msgid "GNU/Linux"
 msgstr "GNU/Linux"
 
@@ -3621,6 +3629,7 @@ msgid "The installers above fully support Windows 64bit and MacOS."
 msgstr ""
 
 #: ../../getting-started/installation.rst:58
+#: ../../getting-started/system-requirements.rst:57
 msgid "FreeBSD"
 msgstr "FreeBSD"
 
@@ -3892,18 +3901,24 @@ msgid ""
 " by the kernel, causing xruns when attempting to access the data."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:51
+#: ../../getting-started/system-requirements.rst:53
 msgid ""
 "To set up these privileges for your user, see `How do I configure my "
 "linux system to allow JACK to use realtime scheduling? "
 "<https://jackaudio.org/faq/linux_rt_config.html#systems-using-pam>`_."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:55
+#: ../../getting-started/system-requirements.rst:58
+msgid ""
+"To set up these privileges for your user, change the user class' "
+"``memorylocked`` value in :file:`/etc/login.conf`."
+msgstr ""
+
+#: ../../getting-started/system-requirements.rst:63
 msgid "Open File Limit"
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:56
+#: ../../getting-started/system-requirements.rst:64
 msgid ""
 "On startup, Zrythm will attempt to increase the maximum limit of files it"
 " can open. You should give your user enough permissions to allow this."
@@ -9257,9 +9272,6 @@ msgid ""
 "Information about the currently selected backend and options is visible "
 "in the bottom left corner."
 msgstr ""
-
-#~ msgid "x86_64 (64-bit), i686 (32-bit), armhf (ARMv7) or aarch64 (ARMv8)"
-#~ msgstr ""
 
 #~ msgid "test2"
 #~ msgstr ""

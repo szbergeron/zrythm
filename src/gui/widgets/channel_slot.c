@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2018-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -26,11 +26,13 @@
 #include "gui/backend/event.h"
 #include "gui/backend/event_manager.h"
 #include "gui/widgets/bot_bar.h"
+#include "gui/widgets/bot_dock_edge.h"
 #include "gui/widgets/center_dock.h"
 #include "gui/widgets/channel.h"
 #include "gui/widgets/channel_slot.h"
 #include "gui/widgets/left_dock_edge.h"
 #include "gui/widgets/main_window.h"
+#include "gui/widgets/mixer.h"
 #include "project.h"
 #include "utils/cairo.h"
 #include "utils/gtk.h"
@@ -111,7 +113,7 @@ channel_slot_draw_cb (
     {
       GdkRGBA bg, fg;
       fg = UI_COLOR_BLACK;
-      if (!plugin_is_enabled (plugin))
+      if (!plugin_is_enabled (plugin, false))
         {
           bg.red = 0.6;
           bg.green = 0.6;
@@ -246,16 +248,21 @@ on_drag_data_received (
     gdk_atom_intern_static_string (
       TARGET_ENTRY_PLUGIN_DESCR);
 
+  const guchar * selection_data =
+    gtk_selection_data_get_data (data);
+  if (!selection_data)
+    {
+      return;
+    }
+
   bool plugin_invalid = false;
   Plugin * pl = NULL;
   PluginDescriptor * descr = NULL;
   if (atom == plugin_atom)
     {
       Plugin * received_pl = NULL;
-      const guchar *my_data =
-        gtk_selection_data_get_data (data);
       memcpy (
-        &received_pl, my_data,
+        &received_pl, selection_data,
         sizeof (received_pl));
       pl = plugin_find (&received_pl->id);
       g_warn_if_fail (pl);
@@ -311,10 +318,8 @@ on_drag_data_received (
     {
       gdk_drag_status (
         context, GDK_ACTION_COPY, time);
-      const guchar *my_data =
-        gtk_selection_data_get_data (data);
-      memcpy (&descr, my_data, sizeof (descr));
-      g_warn_if_fail (descr);
+      memcpy (
+        &descr, selection_data, sizeof (descr));
 
       /* validate */
       if (plugin_descriptor_is_valid_for_slot_type (
@@ -558,15 +563,17 @@ drag_end (
       GTK_GESTURE (gesture));
 
   Plugin * pl = get_plugin (self);
-  if (self->n_press == 2)
+  if (pl && self->n_press == 2)
     {
-      g_message ("opening plugin ");
-      if (pl)
-        {
-          pl->visible = !pl->visible;
-          EVENTS_PUSH (
-            ET_PLUGIN_VISIBILITY_CHANGED, pl);
-        }
+      bool new_visible = !pl->visible;
+      g_message (
+        "%s: setting plugin %s visible %d",
+        __func__, pl->setting->descr->name,
+        new_visible);
+      g_warn_if_fail (pl->instantiated);
+      pl->visible = new_visible;
+      EVENTS_PUSH (
+        ET_PLUGIN_VISIBILITY_CHANGED, pl);
     }
   else if (self->n_press == 1)
     {
@@ -587,7 +594,8 @@ drag_end (
         last_plugin_press =
           g_get_monotonic_time ();
     }
-  g_message ("drag end %d", self->n_press);
+  g_message ("%s: drag end %d press",
+    __func__, self->n_press);
 }
 
 static void
@@ -620,25 +628,12 @@ multipress_pressed (
 }
 
 static void
-on_plugin_delete (
-  GtkMenuItem *       menu_item,
-  ChannelSlotWidget * self)
-{
-  UndoableAction * ua =
-    mixer_selections_action_new_delete (
-      MIXER_SELECTIONS);
-  g_return_if_fail (ua);
-  undo_manager_perform (UNDO_MANAGER, ua);
-  EVENTS_PUSH (ET_PLUGINS_REMOVED, self->track);
-}
-
-static void
 on_plugin_bypass_activate (
   GtkMenuItem * menuitem,
   Plugin *      pl)
 {
   plugin_set_enabled (
-    pl, !plugin_is_enabled (pl), true);
+    pl, !plugin_is_enabled (pl, false), true);
 }
 
 static void
@@ -676,6 +671,33 @@ static void
 show_context_menu (
   ChannelSlotWidget * self)
 {
+  MW_MIXER->paste_slot = self;
+
+  switch (self->type)
+    {
+    case PLUGIN_SLOT_INSERT:
+      PROJECT->last_selection =
+        SELECTION_TYPE_INSERT;
+      break;
+    case PLUGIN_SLOT_INSTRUMENT:
+      PROJECT->last_selection =
+        SELECTION_TYPE_INSTRUMENT;
+      break;
+    case PLUGIN_SLOT_MIDI_FX:
+      PROJECT->last_selection =
+        SELECTION_TYPE_MIDI_FX;
+      break;
+    case PLUGIN_SLOT_MODULATOR:
+      PROJECT->last_selection =
+        SELECTION_TYPE_MODULATOR;
+      break;
+    default:
+      g_return_if_reached ();
+      break;
+    }
+  EVENTS_PUSH (
+    ET_PROJECT_SELECTION_TYPE_CHANGED, NULL);
+
   GtkWidget *menu;
   GtkMenuItem * menuitem;
 
@@ -703,7 +725,7 @@ show_context_menu (
             _("Bypass")));
       gtk_check_menu_item_set_active (
         GTK_CHECK_MENU_ITEM (menuitem),
-        !plugin_is_enabled (pl));
+        !plugin_is_enabled (pl, false));
       g_signal_connect (
         G_OBJECT (menuitem), "activate",
         G_CALLBACK (on_plugin_bypass_activate), pl);
@@ -731,11 +753,13 @@ show_context_menu (
           ADD_TO_SHELL;
         }
 
-      menuitem = CREATE_CUT_MENU_ITEM (NULL);
+      menuitem =
+        CREATE_CUT_MENU_ITEM ("win.cut");
       ADD_TO_SHELL;
-      menuitem = CREATE_COPY_MENU_ITEM (NULL);
+      menuitem = CREATE_COPY_MENU_ITEM ("win.copy");
       ADD_TO_SHELL;
-      menuitem = CREATE_PASTE_MENU_ITEM (NULL);
+      menuitem =
+        CREATE_PASTE_MENU_ITEM ("win.paste");
       ADD_TO_SHELL;
     }
 
@@ -743,10 +767,8 @@ show_context_menu (
   if (pl && self->type != PLUGIN_SLOT_INSTRUMENT)
     {
       /* add delete item */
-      menuitem = CREATE_DELETE_MENU_ITEM (NULL);
-      g_signal_connect (
-        G_OBJECT (menuitem), "activate",
-        G_CALLBACK (on_plugin_delete), self);
+      menuitem =
+        CREATE_DELETE_MENU_ITEM ("win.delete");
       ADD_TO_SHELL;
 
       needs_sep = true;
@@ -761,9 +783,12 @@ show_context_menu (
         }
 
       menuitem =
-        CREATE_CLEAR_SELECTION_MENU_ITEM (NULL);
+        CREATE_CLEAR_SELECTION_MENU_ITEM (
+          "win.clear-selection");
       ADD_TO_SHELL;
-      menuitem = CREATE_SELECT_ALL_MENU_ITEM (NULL);
+      menuitem =
+        CREATE_SELECT_ALL_MENU_ITEM (
+          "win.select-all");
       ADD_TO_SHELL;
 
       needs_sep = true;

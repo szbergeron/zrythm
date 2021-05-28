@@ -36,9 +36,11 @@ packages:
   - rubberband
   - rtaudio
   - sed
+  - sfizz
   - suil
   - valgrind
   - vim
+  - x42-plugins
   - xdg-utils
   - zstd
 sources:

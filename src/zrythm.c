@@ -112,11 +112,14 @@ void
 zrythm_remove_recent_project (
   char * filepath)
 {
+  /* FIXME use GStrvBuilder */
   for (int i = 0; i < ZRYTHM->num_recent_projects;
        i++)
     {
-      if (!strcmp (filepath,
-                   ZRYTHM->recent_projects[i]))
+      const char * recent_project =
+        ZRYTHM->recent_projects[i];
+      g_return_if_fail (recent_project);
+      if (string_is_equal (filepath, recent_project))
         {
           array_delete (ZRYTHM->recent_projects,
                         ZRYTHM->num_recent_projects,
@@ -451,6 +454,12 @@ zrythm_get_dir (
             g_build_filename (
               prefix, "share", "locale", NULL);
           break;
+        case ZRYTHM_DIR_SYSTEM_SOURCEVIEW_LANGUAGE_SPECS_DIR:
+          res =
+            g_build_filename (
+              prefix, "share", "gtksourceview-4",
+              "language-specs", NULL);
+          break;
         case ZRYTHM_DIR_SYSTEM_ZRYTHM_DATADIR:
           res =
             g_build_filename (
@@ -473,6 +482,12 @@ zrythm_get_dir (
             g_build_filename (
               prefix, "share", "zrythm",
               "themes", NULL);
+          break;
+        case ZRYTHM_DIR_SYSTEM_THEMES_CSS_DIR:
+          res =
+            g_build_filename (
+              prefix, "share", "zrythm",
+              "themes", "css", NULL);
           break;
         default:
           break;
@@ -514,6 +529,11 @@ zrythm_get_dir (
           res =
             g_build_filename (
               user_dir, "themes", NULL);
+          break;
+        case ZRYTHM_DIR_USER_THEMES_CSS:
+          res =
+            g_build_filename (
+              user_dir, "themes", "css", NULL);
           break;
         case ZRYTHM_DIR_USER_PROFILING:
           res =
@@ -562,6 +582,7 @@ zrythm_init_user_dirs_and_files (
   MK_USER_DIR (TEMPLATES);
   MK_USER_DIR (LOG);
   MK_USER_DIR (THEMES);
+  MK_USER_DIR (THEMES_CSS);
   MK_USER_DIR (PROFILING);
   MK_USER_DIR (GDB);
 
@@ -620,6 +641,11 @@ zrythm_free (
   object_free_w_func_and_null (
     object_utils_free, self->object_utils);
 
+  object_free_w_func_and_null (
+    symap_free, self->symap);
+  object_free_w_func_and_null (
+    symap_free, self->error_domain_symap);
+
   if (ZRYTHM == self)
     {
       ZRYTHM = NULL;
@@ -659,6 +685,7 @@ zrythm_new (
     recording_manager_new ();
   self->plugin_manager = plugin_manager_new ();
   self->symap = symap_new ();
+  self->error_domain_symap = symap_new ();
   self->file_manager = file_manager_new ();
   self->cairo_caches = z_cairo_caches_new ();
 

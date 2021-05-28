@@ -56,6 +56,14 @@ test_plugin_manager_get_plugin_setting (
   const char * pl_uri,
   bool         with_carla);
 
+/**
+ * Creates \ref num_tracks tracks for the given
+ * plugin.
+ *
+ * @param num_tracks Number of tracks to create.
+ *
+ * @return The index of the last track created.
+ */
 int
 test_plugin_manager_create_tracks_from_plugin (
   const char * pl_bundle,
@@ -76,12 +84,15 @@ test_plugin_manager_get_plugin_setting (
 {
   LilvNode * path =
     lilv_new_uri (LILV_WORLD, pl_bundle);
+  g_assert_nonnull (path);
   lilv_world_load_bundle (LILV_WORLD, path);
   lilv_node_free (path);
 
   plugin_manager_clear_plugins (PLUGIN_MANAGER);
   plugin_manager_scan_plugins (
     PLUGIN_MANAGER, 1.0, NULL);
+  g_assert_cmpint (
+    PLUGIN_MANAGER->num_plugins, >, 0);
 
   PluginDescriptor * descr = NULL;
   for (int i = 0; i < PLUGIN_MANAGER->num_plugins;
@@ -113,6 +124,14 @@ test_plugin_manager_get_plugin_setting (
   return setting;
 }
 
+/**
+ * Creates \ref num_tracks tracks for the given
+ * plugin.
+ *
+ * @param num_tracks Number of tracks to create.
+ *
+ * @return The index of the last track created.
+ */
 int
 test_plugin_manager_create_tracks_from_plugin (
   const char * pl_bundle,
@@ -144,7 +163,7 @@ test_plugin_manager_create_tracks_from_plugin (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       track_type, setting, NULL,
-      TRACKLIST->num_tracks, NULL, num_tracks);
+      TRACKLIST->num_tracks, NULL, num_tracks, -1);
   undo_manager_perform (UNDO_MANAGER, ua);
 
   return TRACKLIST->num_tracks - 1;

@@ -211,10 +211,11 @@ track_init (
   const int add_lane)
 {
   self->schema_version = TRACK_SCHEMA_VERSION;
-  self->visible = 1;
+  self->visible = true;
   self->main_height = TRACK_DEF_HEIGHT;
   self->midi_ch = 1;
   self->magic = TRACK_MAGIC;
+  self->enabled = true;
   self->comment = g_strdup ("");
   track_add_lane (self, 0);
 }
@@ -423,8 +424,7 @@ track_clone (
   COPY_MEMBER (visible);
   COPY_MEMBER (main_height);
   COPY_MEMBER (recording);
-  /*COPY_MEMBER (pinned);*/
-  COPY_MEMBER (active);
+  COPY_MEMBER (enabled);
   COPY_MEMBER (color);
   COPY_MEMBER (pos);
   COPY_MEMBER (midi_ch);
@@ -584,6 +584,17 @@ track_get_muted (
 {
   g_return_val_if_fail (self->channel, false);
   return fader_get_muted (self->channel->fader);
+}
+
+/**
+ * Returns if the track is listened.
+ */
+bool
+track_get_listened (
+  Track * self)
+{
+  g_return_val_if_fail (self->channel, false);
+  return fader_get_listened (self->channel->fader);
 }
 
 TrackType
@@ -761,48 +772,16 @@ track_get_velocities_in_range (
       track->type != TRACK_TYPE_INSTRUMENT)
     return;
 
-  TrackLane * lane;
-  ZRegion * region;
-  MidiNote * mn;
-  Position global_start_pos;
   for (int i = 0; i < track->num_lanes; i++)
     {
-      lane = track->lanes[i];
+      TrackLane * lane = track->lanes[i];
       for (int j = 0; j < lane->num_regions; j++)
         {
-          region = lane->regions[j];
-          for (int k = 0;
-               k < region->num_midi_notes; k++)
-            {
-              mn = region->midi_notes[k];
-              midi_note_get_global_start_pos (
-                mn, &global_start_pos);
-
-#define ADD_VELOCITY \
-  array_double_size_if_full ( \
-    *velocities, *num_velocities, \
-    *velocities_size, Velocity *); \
-  (*velocities)[(* num_velocities)++] = \
-    mn->vel
-
-              if (inside &&
-                  position_is_after_or_equal (
-                    &global_start_pos, start_pos) &&
-                  position_is_before_or_equal (
-                    &global_start_pos, end_pos))
-                {
-                  ADD_VELOCITY;
-                }
-              else if (!inside &&
-                  (position_is_before (
-                    &global_start_pos, start_pos) ||
-                  position_is_after (
-                    &global_start_pos, end_pos)))
-                {
-                  ADD_VELOCITY;
-                }
-#undef ADD_VELOCITY
-            }
+          ZRegion * r = lane->regions[j];
+          midi_region_get_velocities_in_range (
+            r, start_pos, end_pos, velocities,
+            num_velocities, velocities_size,
+            inside);
         }
     }
 }
@@ -1112,6 +1091,36 @@ track_set_soloed (
     }
   fader_set_soloed (
     self->channel->fader, solo, trigger_undo,
+    fire_events);
+}
+
+/**
+ * Sets track soloed, updates UI and optionally
+ * adds the action to the undo stack.
+ *
+ * @param auto_select Makes this track the only
+ *   selection in the tracklist. Useful when
+ *   listening to a single track.
+ * @param trigger_undo Create and perform an
+ *   undoable action.
+ * @param fire_events Fire UI events.
+ */
+void
+track_set_listened (
+  Track * self,
+  bool    listen,
+  bool    trigger_undo,
+  bool    auto_select,
+  bool    fire_events)
+{
+  g_return_if_fail (self->channel);
+  if (auto_select)
+    {
+      track_select (
+        self, F_SELECT, F_EXCLUSIVE, fire_events);
+    }
+  fader_set_listened (
+    self->channel->fader, listen, trigger_undo,
     fire_events);
 }
 
@@ -1524,7 +1533,8 @@ track_insert_region (
     {
       AudioClip * clip =
         audio_region_get_clip (region);
-      audio_clip_write_to_pool (clip, false);
+      audio_clip_write_to_pool (
+        clip, false, F_NOT_BACKUP);
     }
 
   g_message ("inserted:");
@@ -1699,6 +1709,13 @@ track_set_pos (
 
   if (self->is_project)
     {
+      /* update mixer selections */
+      if (MIXER_SELECTIONS->has_any &&
+          MIXER_SELECTIONS->track_pos == prev_pos)
+        {
+          MIXER_SELECTIONS->track_pos = pos;
+        }
+
       /* change the clip editor region */
       if (CLIP_EDITOR->has_region &&
           CLIP_EDITOR->region_id.track_pos ==
@@ -1776,7 +1793,7 @@ track_freeze (
               settings.file_uri);
           audio_pool_add_clip (AUDIO_POOL, clip);
           audio_clip_write_to_pool (
-            clip, F_NO_PARTS);
+            clip, F_NO_PARTS, F_NOT_BACKUP);
           self->pool_id = clip->pool_id;
         }
 
@@ -3234,6 +3251,114 @@ track_append_all_ports (
     }
 
 #undef _ADD
+}
+
+bool
+track_is_enabled (
+  Track * self)
+{
+  return self->enabled;
+}
+
+void
+track_set_enabled (
+  Track * self,
+  bool    enabled,
+  bool    trigger_undo,
+  bool    auto_select,
+  bool    fire_events)
+{
+  self->enabled = enabled;
+
+  g_message (
+    "Setting track %s enabled (%d)",
+    self->name, enabled);
+  if (auto_select)
+    {
+      track_select (
+        self, F_SELECT, F_EXCLUSIVE, fire_events);
+    }
+
+  if (trigger_undo)
+    {
+      UndoableAction * action =
+        tracklist_selections_action_new_edit_enable (
+          TRACKLIST_SELECTIONS, enabled);
+      undo_manager_perform (
+        UNDO_MANAGER, action);
+    }
+  else
+    {
+      self->enabled = enabled;
+
+      if (fire_events)
+        {
+          EVENTS_PUSH (
+            ET_TRACK_STATE_CHANGED, self);
+        }
+    }
+}
+
+static void
+get_end_pos_from_objs (
+  ArrangerObject ** objs,
+  int               num_objs,
+  Position *        pos)
+{
+  for (int i = 0; i < num_objs; i++)
+    {
+      ArrangerObject * obj = objs[i];
+      Position end_pos;
+      if (arranger_object_type_has_length (
+            obj->type))
+        {
+          arranger_object_get_end_pos (
+            obj, &end_pos);
+        }
+      else
+        {
+          arranger_object_get_pos (obj, &end_pos);
+        }
+      if (position_is_after (&end_pos, pos))
+        {
+          position_set_to_pos (pos, &end_pos);
+        }
+    }
+}
+
+void
+track_get_total_bars (
+  Track * self,
+  int *   total_bars)
+{
+  Position pos;
+  position_from_bars (&pos, *total_bars);
+
+  for (int i = 0; i < self->num_lanes; i++)
+    {
+      TrackLane * lane = self->lanes[i];
+      get_end_pos_from_objs (
+        (ArrangerObject **) lane->regions,
+        lane->num_regions, &pos);
+    }
+
+  get_end_pos_from_objs (
+    (ArrangerObject **) self->chord_regions,
+    self->num_chord_regions,
+    &pos);
+  get_end_pos_from_objs (
+    (ArrangerObject **) self->scales,
+    self->num_scales, &pos);
+  get_end_pos_from_objs (
+    (ArrangerObject **) self->markers,
+    self->num_markers, &pos);
+
+  int track_total_bars =
+    position_get_total_bars (&pos, true);
+  if (track_total_bars > *total_bars)
+    {
+      *total_bars = track_total_bars;
+    }
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Alexandros Theodotou <alex at zrythm dot org>
+ * Copyright (C) 2019-2021 Alexandros Theodotou <alex at zrythm dot org>
  *
  * This file is part of Zrythm
  *
@@ -30,6 +30,7 @@
 #include <stdbool.h>
 
 #include "utils/types.h"
+#include "utils/yaml.h"
 
 #include <audec/audec.h>
 
@@ -38,6 +39,24 @@
  *
  * @{
  */
+
+/**
+ * Bit depth.
+ */
+typedef enum BitDepth
+{
+  BIT_DEPTH_16,
+  BIT_DEPTH_24,
+  BIT_DEPTH_32
+} BitDepth;
+
+static const cyaml_strval_t
+  bit_depth_strings[] =
+{
+  { "16",   BIT_DEPTH_16 },
+  { "24",   BIT_DEPTH_24 },
+  { "32",   BIT_DEPTH_32 },
+};
 
 /**
  * Number of plugin slots per channel.
@@ -69,8 +88,18 @@ audio_write_raw_file (
   long         frames_already_written,
   long         nframes,
   uint32_t     samplerate,
+  bool         flac,
+  BitDepth     bit_depth,
   unsigned int channels,
   const char * filename);
+
+/**
+ * Returns the number of frames in the given audio
+ * file.
+ */
+long
+audio_get_num_frames (
+  const char * filepath);
 
 /**
  * Returns whether the frame buffers are equal.
@@ -79,7 +108,8 @@ bool
 audio_frames_equal (
   float * src1,
   float * src2,
-  size_t  num_frames);
+  size_t  num_frames,
+  float   epsilon);
 
 /**
  * Returns whether the frame buffer is empty (zero).

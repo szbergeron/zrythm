@@ -62,6 +62,8 @@ typedef enum EditTracksActionType
 {
   EDIT_TRACK_ACTION_TYPE_SOLO,
   EDIT_TRACK_ACTION_TYPE_MUTE,
+  EDIT_TRACK_ACTION_TYPE_LISTEN,
+  EDIT_TRACK_ACTION_TYPE_ENABLE,
   EDIT_TRACK_ACTION_TYPE_VOLUME,
   EDIT_TRACK_ACTION_TYPE_PAN,
 
@@ -83,6 +85,8 @@ static const cyaml_strval_t
 {
   { "solo", EDIT_TRACK_ACTION_TYPE_SOLO },
   { "mute", EDIT_TRACK_ACTION_TYPE_MUTE },
+  { "listen", EDIT_TRACK_ACTION_TYPE_LISTEN },
+  { "enable", EDIT_TRACK_ACTION_TYPE_ENABLE },
   { "volume", EDIT_TRACK_ACTION_TYPE_VOLUME },
   { "pan", EDIT_TRACK_ACTION_TYPE_PAN },
   { "direct out", EDIT_TRACK_ACTION_TYPE_DIRECT_OUT },
@@ -130,16 +134,31 @@ typedef struct TracklistSelectionsAction
    * track. */
   PluginSetting *       pl_setting;
 
-  /** Filename, if we are making an audio track from
-   * a file. */
-  SupportedFile *       file_descr;
+  /**
+   * The basename of the file, if any.
+   *
+   * This will be used as the track name.
+   */
+  char *                file_basename;
 
   /**
-   * When this action is created, it will create
-   * the audio file and add it to the pool.
+   * If this is an action to create a MIDI track
+   * from a MIDI file, this is the base64
+   * representation so that the file does not need
+   * to be stored in the project.
    *
-   * New audio regions should use this ID to avoid
-   * duplication.
+   * @note For audio files,
+   *   TracklistSelectionsAction.pool_id is used.
+   */
+  char *                base64_midi;
+
+  /**
+   * If this is an action to create an Audio track
+   * from an audio file, this is the pool ID of the
+   * audio file.
+   *
+   * If this is not -1, this means that an audio
+   * file exists in the pool.
    */
   int                   pool_id;
 
@@ -238,9 +257,10 @@ static const cyaml_schema_field_t
     num_tracks, &int_schema, 0, CYAML_UNLIMITED),
   YAML_FIELD_INT (
     TracklistSelectionsAction, num_tracks),
-  YAML_FIELD_MAPPING_PTR_OPTIONAL (
-    TracklistSelectionsAction, file_descr,
-    supported_file_fields_schema),
+  YAML_FIELD_STRING_PTR_OPTIONAL (
+    TracklistSelectionsAction, file_basename),
+  YAML_FIELD_STRING_PTR_OPTIONAL (
+    TracklistSelectionsAction, base64_midi),
   YAML_FIELD_INT (
     TracklistSelectionsAction, pool_id),
   YAML_FIELD_MAPPING_PTR_OPTIONAL (
@@ -329,15 +349,19 @@ tracklist_selections_action_new (
   const char *                  new_txt,
   bool                          already_edited);
 
+/**
+ * @param disable_track_pos Track position to
+ *   disable, or -1 to not disable any track.
+ */
 #define tracklist_selections_action_new_create( \
   track_type,pl_setting,file_descr,track_pos, \
-  pos,num_tracks) \
+  pos,num_tracks,disable_track_pos) \
   tracklist_selections_action_new ( \
     TRACKLIST_SELECTIONS_ACTION_CREATE, \
     NULL, NULL, NULL, track_type, pl_setting, \
     file_descr, \
     track_pos, pos, num_tracks, 0, NULL, \
-    false, NULL, 0.f, 0.f, NULL, false)
+    disable_track_pos, NULL, 0.f, 0.f, NULL, false)
 
 /**
  * Creates a new TracklistSelectionsAction for an
@@ -347,7 +371,7 @@ tracklist_selections_action_new (
   pl_setting,track_pos,num_tracks) \
   tracklist_selections_action_new_create ( \
     TRACK_TYPE_AUDIO_BUS, pl_setting, NULL, track_pos, \
-    NULL, num_tracks)
+    NULL, num_tracks, -1)
 
 /**
  * Creates a new TracklistSelectionsAction for an
@@ -357,7 +381,7 @@ tracklist_selections_action_new (
   pl_setting,track_pos,num_tracks) \
   tracklist_selections_action_new_create ( \
     TRACK_TYPE_INSTRUMENT, pl_setting, NULL, track_pos, \
-    NULL, num_tracks)
+    NULL, num_tracks, -1)
 
 /**
  * Creates a new TracklistSelectionsAction for an
@@ -367,7 +391,7 @@ tracklist_selections_action_new (
   track_pos,num_tracks) \
   tracklist_selections_action_new_create ( \
     TRACK_TYPE_AUDIO_GROUP, NULL, NULL, track_pos, \
-    NULL, num_tracks)
+    NULL, num_tracks, -1)
 
 /**
  * Creates a new TracklistSelectionsAction for a MIDI
@@ -377,7 +401,7 @@ tracklist_selections_action_new (
   track_pos,num_tracks) \
   tracklist_selections_action_new_create ( \
     TRACK_TYPE_MIDI, NULL, NULL, track_pos, \
-    NULL, num_tracks)
+    NULL, num_tracks, -1)
 
 /**
  * Generic edit action.
@@ -434,6 +458,24 @@ tracklist_selections_action_new (
     tls_before, NULL, NULL, 0, NULL, NULL, -1, NULL, \
     -1, EDIT_TRACK_ACTION_TYPE_SOLO, NULL, \
     solo_new, NULL, \
+    0.f, 0.f, NULL, false)
+
+#define tracklist_selections_action_new_edit_listen( \
+  tls_before,solo_new) \
+  tracklist_selections_action_new ( \
+    TRACKLIST_SELECTIONS_ACTION_EDIT, \
+    tls_before, NULL, NULL, 0, NULL, NULL, -1, NULL, \
+    -1, EDIT_TRACK_ACTION_TYPE_LISTEN, NULL, \
+    solo_new, NULL, \
+    0.f, 0.f, NULL, false)
+
+#define tracklist_selections_action_new_edit_enable( \
+  tls_before,enable_new) \
+  tracklist_selections_action_new ( \
+    TRACKLIST_SELECTIONS_ACTION_EDIT, \
+    tls_before, NULL, NULL, 0, NULL, NULL, -1, NULL, \
+    -1, EDIT_TRACK_ACTION_TYPE_ENABLE, NULL, \
+    enable_new, NULL, \
     0.f, 0.f, NULL, false)
 
 #define tracklist_selections_action_new_edit_direct_out( \

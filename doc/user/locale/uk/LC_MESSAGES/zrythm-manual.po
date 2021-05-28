@@ -1,17 +1,20 @@
-# Translations template for PROJECT.
+# Ukrainian translations for PROJECT.
 # Copyright (C) 2021 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2021.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2021-04-25 05:03+0100\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"POT-Creation-Date: 2021-05-17 17:28+0100\n"
+"PO-Revision-Date: 2021-05-14 21:35+0000\n"
+"Last-Translator: Tymofij Lytvynenko <till.svit@gmail.com>\n"
+"Language: uk\n"
+"Language-Team: Ukrainian <https://hosted.weblate.org/projects/zrythm"
+"/user-manual/uk/>\n"
+"Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -295,7 +298,7 @@ msgstr ""
 #: ../../scripting/overview.rst:6 ../../tracks/overview.rst:6
 #: ../../zrythm-interface/overview.rst:6
 msgid "Overview"
-msgstr ""
+msgstr "Огляд"
 
 #: ../../chords-and-scales/overview.rst:8
 msgid ""
@@ -475,7 +478,7 @@ msgstr ""
 
 #: ../../configuration/preferences.rst:20
 msgid "General"
-msgstr ""
+msgstr "Загальне"
 
 #: ../../configuration/preferences.rst:22
 msgid "General settings."
@@ -546,7 +549,7 @@ msgstr ""
 #: ../../getting-started/getting-plugins.rst:11
 #: ../../plugins-files/plugins/intro.rst:6
 msgid "Plugins"
-msgstr ""
+msgstr "Розширення"
 
 #: ../../configuration/preferences.rst:59
 msgid ":term:`Plugin` settings."
@@ -684,7 +687,7 @@ msgstr ""
 
 #: ../../configuration/preferences.rst:141 ../../editing/intro.rst:8
 msgid "Editing"
-msgstr ""
+msgstr "Редагування"
 
 #: ../../configuration/preferences.rst:143
 msgid "Editing options."
@@ -870,7 +873,7 @@ msgstr ""
 #: ../../contributing/intro.rst:39
 msgid ""
 "The latest development branch for new features is ``development`` in our "
-"`git repository <https://git.zrythm.org/cgit/zrythm>`_."
+"`git repository <https://git.zrythm.org/zrythm/zrythm>`_."
 msgstr ""
 
 #: ../../contributing/intro.rst:44
@@ -924,7 +927,7 @@ msgstr ""
 
 #: ../../contributing/intro.rst:77
 msgid "User Manual"
-msgstr ""
+msgstr "Посібник користувача"
 
 #: ../../contributing/intro.rst:78
 msgid ""
@@ -1481,7 +1484,7 @@ msgstr ""
 #: ../../editing/clip-editors/ruler.rst:32
 #: ../../playback-and-recording/overview.rst:12
 msgid "Playhead"
-msgstr ""
+msgstr "Відтворення"
 
 #: ../../editing/clip-editors/ruler.rst:33
 msgid ""
@@ -1672,7 +1675,7 @@ msgstr ""
 
 #: ../../editing/common-operations.rst:76
 msgid "Delete"
-msgstr ""
+msgstr "Видалити"
 
 #: ../../editing/common-operations.rst:77
 msgid "Delete the selected objects. You can also press :kbd:`Delete`."
@@ -1726,7 +1729,7 @@ msgstr ""
 
 #: ../../editing/edit-tools.rst:20
 msgid "Select/Stretch Tool"
-msgstr ""
+msgstr "Знаряддя \"Виділення/розтягування\""
 
 #: ../../editing/edit-tools.rst:21
 msgid "This can be toggled to switch between Select and Stretch."
@@ -1841,7 +1844,7 @@ msgstr ""
 
 #: ../../editing/edit-tools.rst:102
 msgid "Edit Tool"
-msgstr ""
+msgstr "Знаряддя редагування"
 
 #: ../../editing/edit-tools.rst:103
 msgid ""
@@ -1861,7 +1864,7 @@ msgstr ""
 
 #: ../../editing/edit-tools.rst:115
 msgid "Cut Tool"
-msgstr ""
+msgstr "Знаряддя обрізування"
 
 #: ../../editing/edit-tools.rst:116
 msgid ""
@@ -1882,7 +1885,7 @@ msgstr ""
 
 #: ../../editing/edit-tools.rst:129
 msgid "Ramp Tool"
-msgstr ""
+msgstr "Знаряддя Рамп"
 
 #: ../../editing/edit-tools.rst:130
 msgid ""
@@ -2803,12 +2806,13 @@ msgid ""
 msgstr ""
 
 #: ../../getting-started/installation.rst:36
+#: ../../getting-started/system-requirements.rst:52
 msgid "GNU/Linux"
-msgstr ""
+msgstr "GNU/Linux"
 
 #: ../../getting-started/installation.rst:39
 msgid "Installer"
-msgstr ""
+msgstr "Установник"
 
 #: ../../getting-started/installation.rst:40
 msgid "The installer supports the following distributions (and derivatives):"
@@ -2849,6 +2853,7 @@ msgid "The installers above fully support Windows 64bit and MacOS."
 msgstr ""
 
 #: ../../getting-started/installation.rst:58
+#: ../../getting-started/system-requirements.rst:57
 msgid "FreeBSD"
 msgstr ""
 
@@ -3053,18 +3058,24 @@ msgid ""
 " by the kernel, causing xruns when attempting to access the data."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:51
+#: ../../getting-started/system-requirements.rst:53
 msgid ""
 "To set up these privileges for your user, see `How do I configure my "
 "linux system to allow JACK to use realtime scheduling? "
 "<https://jackaudio.org/faq/linux_rt_config.html#systems-using-pam>`_."
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:55
+#: ../../getting-started/system-requirements.rst:58
+msgid ""
+"To set up these privileges for your user, change the user class' "
+"``memorylocked`` value in :file:`/etc/login.conf`."
+msgstr ""
+
+#: ../../getting-started/system-requirements.rst:63
 msgid "Open File Limit"
 msgstr ""
 
-#: ../../getting-started/system-requirements.rst:56
+#: ../../getting-started/system-requirements.rst:64
 msgid ""
 "On startup, Zrythm will attempt to increase the maximum limit of files it"
 " can open. You should give your user enough permissions to allow this."
@@ -3274,7 +3285,7 @@ msgstr ""
 
 #: ../../glossary/intro.rst:114
 msgid "Project"
-msgstr ""
+msgstr "Проєкт"
 
 #: ../../glossary/intro.rst:116
 msgid ""
@@ -3370,7 +3381,7 @@ msgstr ""
 
 #: ../../index.rst:8
 msgid "Zrythm"
-msgstr ""
+msgstr "Zrythm"
 
 #: ../../index.rst:10
 msgid "Welcome to the Zrythm manual."
@@ -3536,7 +3547,7 @@ msgstr ""
 
 #: ../../mixing/routing.rst:6 ../../routing/intro.rst:6
 msgid "Routing"
-msgstr ""
+msgstr "Маршрутизація (Routing)"
 
 #: ../../mixing/routing.rst:9
 msgid "Groups"
@@ -4227,7 +4238,7 @@ msgstr ""
 
 #: ../../plugins-files/plugins/plugin-browser.rst:23
 msgid "Collection"
-msgstr ""
+msgstr "Колекція"
 
 #: ../../plugins-files/plugins/plugin-browser.rst:22
 msgid ""
@@ -4237,7 +4248,7 @@ msgstr ""
 
 #: ../../plugins-files/plugins/plugin-browser.rst:26
 msgid "Category"
-msgstr ""
+msgstr "Категорія"
 
 #: ../../plugins-files/plugins/plugin-browser.rst:26
 msgid ""
@@ -4247,7 +4258,7 @@ msgstr ""
 
 #: ../../plugins-files/plugins/plugin-browser.rst:30
 msgid "Protocol"
-msgstr ""
+msgstr "Протокол"
 
 #: ../../plugins-files/plugins/plugin-browser.rst:29
 msgid "Allows you to filter plugins based their protocol (eg., LV2 or SFZ)."
@@ -7045,7 +7056,7 @@ msgstr ""
 
 #: ../../zrythm-interface/main-toolbar.rst:96
 msgid "Chat"
-msgstr ""
+msgstr "Бесіда (Chat)"
 
 #: ../../zrythm-interface/main-toolbar.rst:97
 msgid "Join the Zrythm chatroom on Matrix."
@@ -7238,4 +7249,10 @@ msgid ""
 "Information about the currently selected backend and options is visible "
 "in the bottom left corner."
 msgstr ""
+
+#~ msgid ""
+#~ "The latest development branch for new"
+#~ " features is ``development`` in our "
+#~ "`git repository <https://git.zrythm.org/cgit/zrythm>`_."
+#~ msgstr ""
 

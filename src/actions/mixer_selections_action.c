@@ -254,22 +254,24 @@ static void
 save_existing_plugin (
   MixerSelectionsAction * self,
   MixerSelections *       tmp_ms,
-  PluginSlotType          slot_type,
   Track *                 from_tr,
+  PluginSlotType          from_slot_type,
   int                     from_slot,
   Track *                 to_tr,
+  PluginSlotType          to_slot_type,
   int                     to_slot)
 {
   Plugin * existing_pl =
     track_get_plugin_at_slot (
-      to_tr, slot_type, to_slot);
+      to_tr, to_slot_type, to_slot);
   if (existing_pl &&
       (from_tr != to_tr ||
+       from_slot_type != to_slot_type ||
        from_slot != to_slot))
     {
       mixer_selections_add_slot (
         tmp_ms, to_tr,
-        slot_type, to_slot, F_CLONE);
+        to_slot_type, to_slot, F_CLONE);
       clone_ats (
         self, tmp_ms, true,
         tmp_ms->num_slots - 1);
@@ -366,7 +368,9 @@ do_or_undo_create_or_delete (
   PluginSlotType slot_type =
     create ? self->slot_type : own_ms->type;
   int loop_times =
-    create ? self->num_plugins : own_ms->num_slots;
+    create &&
+    self->type != MIXER_SELECTIONS_ACTION_PASTE ?
+      self->num_plugins : own_ms->num_slots;
   bool delete = !create;
 
   /* if creating plugins (create do or delete undo) */
@@ -397,10 +401,22 @@ do_or_undo_create_or_delete (
           Plugin * pl = NULL;
           if (create)
             {
-              pl =
-                plugin_new_from_setting (
-                  self->setting, self->to_track_pos,
-                  slot_type, slot);
+              if (self->type ==
+                    MIXER_SELECTIONS_ACTION_PASTE)
+                {
+                  pl =
+                    plugin_clone (
+                      own_ms->plugins[i],
+                      F_NOT_PROJECT);
+                }
+              else
+                {
+                  pl =
+                    plugin_new_from_setting (
+                      self->setting,
+                      self->to_track_pos,
+                      slot_type, slot);
+                }
               g_return_val_if_fail (
                 IS_PLUGIN_AND_NONNULL (pl), -1);
 
@@ -433,11 +449,11 @@ do_or_undo_create_or_delete (
 
           /* save any plugin about to be deleted */
           save_existing_plugin (
-            self, self->deleted_ms, slot_type,
-            NULL, -1,
+            self, self->deleted_ms, NULL,
+            slot_type, -1,
             slot_type == PLUGIN_SLOT_MODULATOR ?
               P_MODULATOR_TRACK : track,
-            slot);
+            slot_type, slot);
 
           /* add to destination */
           track_insert_plugin (
@@ -685,7 +701,9 @@ do_or_undo_move_or_copy (
   bool                    copy)
 {
   MixerSelections * own_ms = self->ms_before;
-  PluginSlotType slot_type = self->slot_type;
+  PluginSlotType from_slot_type =
+    own_ms->type;
+  PluginSlotType to_slot_type = self->slot_type;
   Track * from_tr =
     mixer_selections_get_track (own_ms);
   g_return_val_if_fail (from_tr, -1);
@@ -789,33 +807,49 @@ do_or_undo_move_or_copy (
 
           /* save any plugin about to be deleted */
           save_existing_plugin (
-            self, self->deleted_ms, own_ms->type,
-            from_tr, from_slot, to_tr, to_slot);
+            self, self->deleted_ms, from_tr,
+            from_slot_type, from_slot,
+            to_tr, to_slot_type, to_slot);
 
           /* move or copy the plugin */
           if (move)
             {
-              g_message (
-                "moving plugin from %d to %d",
-                from_slot, to_slot);
+              g_debug (
+                "%s: moving plugin from "
+                "%s:%s:%d to %s:%s:%d",
+                __func__,
+                from_tr->name,
+                plugin_slot_type_strings[from_slot_type].str,
+                from_slot,
+                to_tr->name,
+                plugin_slot_type_strings[to_slot_type].str,
+                to_slot);
 
               if (from_tr != to_tr ||
+                  from_slot_type != to_slot_type ||
                   from_slot != to_slot)
                 {
                   plugin_move (
-                    pl, to_tr, self->slot_type,
+                    pl, to_tr, to_slot_type,
                     to_slot,
                     F_NO_PUBLISH_EVENTS);
                 }
             }
           else if (copy)
             {
-              g_message (
-                "moving plugin from %d to %d",
-                from_slot, to_slot);
+              g_debug (
+                "%s: copying plugin from "
+                "%s:%s:%d to %s:%s:%d",
+                __func__,
+                from_tr->name,
+                plugin_slot_type_strings[from_slot_type].str,
+                from_slot,
+                to_tr->name,
+                plugin_slot_type_strings[to_slot_type].str,
+                to_slot);
 
               track_insert_plugin (
-                to_tr, pl, slot_type, to_slot,
+                to_tr, pl, to_slot_type, to_slot,
                 F_NOT_REPLACING, F_NOT_MOVING_PLUGIN,
                 F_NO_CONFIRM, F_GEN_AUTOMATABLES,
                 F_NO_RECALC_GRAPH,
@@ -833,14 +867,14 @@ do_or_undo_move_or_copy (
             {
               copy_automation_from_track1_to_track2 (
                 from_tr, to_tr,
-                slot_type, own_ms->slots[i],
+                to_slot_type, own_ms->slots[i],
                 to_slot);
             }
 
           /* select it */
           mixer_selections_add_slot (
             MIXER_SELECTIONS, to_tr,
-            slot_type, to_slot, F_NO_CLONE);
+            to_slot_type, to_slot, F_NO_CLONE);
 
           /* if new plugin (copy), activate it and
            * set visibility */
@@ -905,7 +939,7 @@ do_or_undo_move_or_copy (
           int to_slot = self->to_slot + i;
           Plugin * pl =
             track_get_plugin_at_slot (
-              to_tr, slot_type, to_slot);
+              to_tr, to_slot_type, to_slot);
           g_return_val_if_fail (IS_PLUGIN (pl), -1);
 
           /* original slot */
@@ -915,27 +949,37 @@ do_or_undo_move_or_copy (
           /* if moving plugins back */
           if (move)
             {
-              /* move plugin to its original slot */
-              g_message (
-                "moving plugin back from %d to %d",
-                to_slot, from_slot);
+              /* move plugin to its original
+               * slot */
+              g_debug (
+                "%s: moving plugin back from "
+                "%s:%s:%d to %s:%s:%d",
+                __func__,
+                to_tr->name,
+                plugin_slot_type_strings[to_slot_type].str,
+                to_slot,
+                from_tr->name,
+                plugin_slot_type_strings[from_slot_type].str,
+                from_slot);
+
               if (from_tr!= to_tr ||
+                  from_slot_type != to_slot_type ||
                   from_slot != to_slot)
                 {
                   Plugin * existing_pl =
                     track_get_plugin_at_slot (
-                      from_tr, own_ms->type,
+                      from_tr, from_slot_type,
                       from_slot);
                   g_warn_if_fail (!existing_pl);
                   plugin_move (
-                    pl, from_tr, own_ms->type,
+                    pl, from_tr, from_slot_type,
                     from_slot, F_NO_PUBLISH_EVENTS);
                 }
             }
           else if (copy)
             {
               track_remove_plugin (
-                to_tr, slot_type, to_slot,
+                to_tr, to_slot_type, to_slot,
                 F_NOT_REPLACING,
                 F_NOT_MOVING_PLUGIN,
                 F_DELETING_PLUGIN,
@@ -953,14 +997,17 @@ do_or_undo_move_or_copy (
             {
               pl =
                 track_get_plugin_at_slot (
-                  from_tr, slot_type, from_slot);
+                  from_tr, from_slot_type,
+                  from_slot);
             }
 
           /* add orig plugin to mixer selections */
-          g_warn_if_fail (IS_PLUGIN (pl));
+          g_warn_if_fail (
+            IS_PLUGIN_AND_NONNULL (pl));
           mixer_selections_add_slot (
             MIXER_SELECTIONS, from_tr,
-            own_ms->type, pl->id.slot, F_NO_CLONE);
+            from_slot_type, from_slot,
+            F_NO_CLONE);
         }
 
       /* if a new track was created delete it */
@@ -1004,6 +1051,11 @@ do_or_undo (
     case MIXER_SELECTIONS_ACTION_COPY:
       return
         do_or_undo_move_or_copy (
+          self, _do, true);
+      break;
+    case MIXER_SELECTIONS_ACTION_PASTE:
+      return
+        do_or_undo_create_or_delete (
           self, _do, true);
       break;
     default:
@@ -1084,6 +1136,20 @@ mixer_selections_action_stringize (
         {
           return g_strdup_printf (
             _("Copy %d Plugins"),
+            self->ms_before->num_slots);
+        }
+    case MIXER_SELECTIONS_ACTION_PASTE:
+      if (self->ms_before->num_slots == 1)
+        {
+          return g_strdup_printf (
+            _("Paste %s"),
+            self->ms_before->
+              plugins[0]->setting->descr->name);
+        }
+      else
+        {
+          return g_strdup_printf (
+            _("Paste %d Plugins"),
             self->ms_before->num_slots);
         }
     default:

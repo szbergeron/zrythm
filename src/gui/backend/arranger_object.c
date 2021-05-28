@@ -1868,21 +1868,24 @@ arranger_object_get_arranger (
 }
 
 /**
- * Returns if the lane counterpart should be visible.
+ * Returns if the lane counterpart should be
+ * visible.
  */
-int
+bool
 arranger_object_should_lane_be_visible (
   ArrangerObject * self)
 {
   if (self->type == TYPE (REGION))
     {
-      return
-        arranger_object_get_track (self)->
-          lanes_visible;
+      Track * track =
+        arranger_object_get_track (self);
+      g_return_val_if_fail (
+        IS_TRACK_AND_NONNULL (track), false);
+      return track->lanes_visible;
     }
   else
     {
-      return 0;
+      return false;
     }
 }
 
@@ -1908,6 +1911,7 @@ arranger_object_should_orig_be_visible (
 
   ArrangerWidget * arranger =
     arranger_object_get_arranger (self);
+  g_return_val_if_fail (arranger, false);
 
   /* check trans/non-trans visiblity */
   if (ARRANGER_WIDGET_GET_ACTION (
@@ -2185,7 +2189,7 @@ clone_region (
         ZRegion * ar =
           audio_region_new (
             region->pool_id, NULL, NULL, -1,
-            NULL, 0, &r_obj->pos,
+            NULL, 0, 0, &r_obj->pos,
             region->id.track_pos,
             region->id.lane_pos,
             region->id.idx);
@@ -2372,6 +2376,7 @@ clone_marker (
 {
   Marker * marker = marker_new (src->name);
   marker->index = src->index;
+  marker->type = src->type;
   marker->track_pos = src->track_pos;
 
   return (ArrangerObject *) marker;
@@ -3354,6 +3359,8 @@ arranger_object_is_frozen (
 {
   Track * track =
     arranger_object_get_track (obj);
+  g_return_val_if_fail (
+    IS_TRACK_AND_NONNULL (track), false);
   return track->frozen;
 }
 

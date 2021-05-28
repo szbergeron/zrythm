@@ -66,13 +66,11 @@ fader_init_loaded (
       break;
     case FADER_TYPE_MIDI_CHANNEL:
       self->midi_in->midi_events =
-        midi_events_new (
-          self->midi_in);
+        midi_events_new ();
       port_set_owner_fader (
         self->midi_in, self);
       self->midi_out->midi_events =
-        midi_events_new (
-          self->midi_out);
+        midi_events_new ();
       port_set_owner_fader (
         self->midi_out, self);
       break;
@@ -126,6 +124,9 @@ fader_new (
       TYPE_CONTROL, FLOW_INPUT,
       passthrough ?
         _("Prefader Volume") : _("Fader Volume"));
+  self->amp->deff = amp;
+  self->amp->minf = 0.f;
+  self->amp->maxf = 2.f;
   port_set_control_value (
     self->amp, amp, F_NOT_NORMALIZED,
     F_NO_PUBLISH_EVENTS);
@@ -263,7 +264,7 @@ fader_new (
         port_new_with_type (
           TYPE_EVENT, FLOW_INPUT, name);
       self->midi_in->midi_events =
-        midi_events_new (self->midi_in);
+        midi_events_new ();
 
       /* MIDI out */
       if (passthrough)
@@ -278,8 +279,7 @@ fader_new (
         port_new_with_type (
           TYPE_EVENT, FLOW_OUTPUT, name);
       self->midi_out->midi_events =
-        midi_events_new (
-          self->midi_out);
+        midi_events_new ();
 
       port_set_owner_fader (
         self->midi_in, self);
@@ -452,6 +452,55 @@ fader_set_soloed (
     }
 }
 
+/**
+ * Returns if the fader is listened.
+ */
+bool
+fader_get_listened (
+  Fader * self)
+{
+  return self->listen;
+}
+
+/**
+ * Sets fader listen and optionally adds the action
+ * to the undo stack.
+ */
+void
+fader_set_listened (
+  Fader * self,
+  bool    listen,
+  bool    trigger_undo,
+  bool    fire_events)
+{
+  Track * track = fader_get_track (self);
+  g_return_if_fail (track);
+
+  if (trigger_undo)
+    {
+      /* this is only supported if the fader track
+       * is the only track selected */
+      g_return_if_fail (
+        TRACKLIST_SELECTIONS->num_tracks == 1 &&
+        TRACKLIST_SELECTIONS->tracks[0] == track);
+      UndoableAction * action =
+        tracklist_selections_action_new_edit_listen (
+          TRACKLIST_SELECTIONS, listen);
+      undo_manager_perform (
+        UNDO_MANAGER, action);
+    }
+  else
+    {
+      self->listen = listen;
+
+      if (fire_events)
+        {
+          EVENTS_PUSH (
+            ET_TRACK_STATE_CHANGED, track);
+        }
+    }
+}
+
 void
 fader_update_volume_and_fader_val (
   Fader * self)
@@ -492,7 +541,9 @@ fader_add_amp (
 
   float fader_amp = fader_get_amp (self);
   fader_amp =
-    CLAMP (fader_amp + amp, 0.f, 2.f);
+    CLAMP (
+      fader_amp + amp, self->amp->minf,
+      self->amp->maxf);
   fader_set_amp (self, fader_amp);
 
   fader_update_volume_and_fader_val (self);
@@ -571,6 +622,28 @@ fader_get_fader_val (
   return ((Fader *) self)->fader_val;
 }
 
+float
+fader_get_default_fader_val (
+  void * self)
+{
+  Fader * fader = (Fader *) self;
+  return
+    math_get_fader_val_from_amp (
+      fader->amp->deff);
+}
+
+void
+fader_db_string_getter (
+  void * obj,
+  char * buf)
+{
+  Fader * fader = (Fader *) obj;
+
+  sprintf (
+    buf, "%.1f",
+    math_amp_to_dbfs (fader->amp->control));
+}
+
 /**
  * Sets the fader levels from a normalized value
  * 0.0-1.0 (such as in widgets).
@@ -583,13 +656,34 @@ fader_set_fader_val (
   self->fader_val = fader_val;
   float fader_amp =
     math_get_amp_val_from_fader (fader_val);
+  fader_amp =
+    CLAMP (
+      fader_amp, self->amp->minf, self->amp->maxf);
   fader_set_amp (self, fader_amp);
   self->volume = math_amp_to_dbfs (fader_amp);
 
   if (self == MONITOR_FADER)
     {
       g_settings_set_double (
-        S_UI, "monitor-out-vol",
+        S_MONITOR, "monitor-vol",
+        (double) fader_amp);
+    }
+  else if (self == CONTROL_ROOM->mute_fader)
+    {
+      g_settings_set_double (
+        S_MONITOR, "mute-vol",
+        (double) fader_amp);
+    }
+  else if (self == CONTROL_ROOM->listen_fader)
+    {
+      g_settings_set_double (
+        S_MONITOR, "listen-vol",
+        (double) fader_amp);
+    }
+  else if (self == CONTROL_ROOM->dim_fader)
+    {
+      g_settings_set_double (
+        S_MONITOR, "dim-vol",
         (double) fader_amp);
     }
 }
@@ -856,18 +950,19 @@ fader_process (
   if (self->type == FADER_TYPE_AUDIO_CHANNEL ||
       self->type == FADER_TYPE_MONITOR)
     {
+      /* copy the input to output */
+      dsp_copy (
+        &self->stereo_out->l->buf[start_frame],
+        &self->stereo_in->l->buf[start_frame],
+        nframes);
+      dsp_copy (
+        &self->stereo_out->r->buf[start_frame],
+        &self->stereo_in->r->buf[start_frame],
+        nframes);
+
       /* if prefader */
       if (self->passthrough)
         {
-          /* copy the input to output */
-          dsp_copy (
-            &self->stereo_out->l->buf[start_frame],
-            &self->stereo_in->l->buf[start_frame],
-            nframes);
-          dsp_copy (
-            &self->stereo_out->r->buf[start_frame],
-            &self->stereo_in->r->buf[start_frame],
-            nframes);
 
           /* if track frozen and transport is
            * rolling */
@@ -886,85 +981,167 @@ fader_process (
         }
       else /* not prefader */
         {
+          /* if monitor */
+          if (self->type == FADER_TYPE_MONITOR)
+            {
+              float dim_amp =
+                fader_get_amp (
+                  CONTROL_ROOM->dim_fader);
+
+              /* if have listened tracks */
+              if (tracklist_has_listened (
+                    TRACKLIST))
+                {
+                  /* dim signal */
+                  dsp_mul_k2 (
+                    &self->stereo_out->l->buf[
+                      start_frame],
+                    dim_amp, nframes);
+                  dsp_mul_k2 (
+                    &self->stereo_out->r->buf[
+                      start_frame],
+                    dim_amp, nframes);
+
+                  /* add listened signal */
+                  /* TODO add "listen" buffer
+                   * on fader struct and add
+                   * listened tracks to it during
+                   * processing instead of looping
+                   * here */
+                  float listen_amp =
+                    fader_get_amp (
+                      CONTROL_ROOM->listen_fader);
+                  for (int i = 0;
+                       i < TRACKLIST->num_tracks;
+                       i++)
+                    {
+                      Track * t =
+                        TRACKLIST->tracks[i];
+
+                      if (track_type_has_channel (
+                            t->type) &&
+                          track_get_listened (t))
+                        {
+                          Fader * f =
+                            track_get_fader (
+                              t, true);
+                          dsp_mix2 (
+                            &self->stereo_out->l->buf[
+                              start_frame],
+                            &f->stereo_out->l->buf[
+                              start_frame],
+                            1.f, listen_amp,
+                            nframes);
+                          dsp_mix2 (
+                            &self->stereo_out->r->buf[
+                              start_frame],
+                            &f->stereo_out->r->buf[
+                              start_frame],
+                            1.f, listen_amp,
+                            nframes);
+                        }
+                    }
+                }
+
+              /* apply dim if enabled */
+              if (CONTROL_ROOM->dim_output)
+                {
+                  dsp_mul_k2 (
+                    &self->stereo_out->l->buf[
+                      start_frame],
+                    dim_amp, nframes);
+                  dsp_mul_k2 (
+                    &self->stereo_out->r->buf[
+                      start_frame],
+                    dim_amp, nframes);
+                }
+            }
+
           float calc_l, calc_r;
           balance_control_get_calc_lr (
             BALANCE_CONTROL_ALGORITHM_LINEAR,
             pan, &calc_l, &calc_r);
 
-          if (effectively_muted)
+          /* apply fader and pan */
+          dsp_mul_k2 (
+            &self->stereo_out->l->buf[
+              start_frame],
+            amp * calc_l, nframes);
+          dsp_mul_k2 (
+            &self->stereo_out->r->buf[
+              start_frame],
+            amp * calc_r, nframes);
+
+          /* make mono if mono compat
+           * enabled. equal amplitude is
+           * more suitable for mono
+           * compatibility checking */
+          /* for reference:
+           * equal power sum =
+           * (L+R) * 0.7079 (-3dB)
+           * equal amplitude sum =
+           * (L+R) /2 (-6.02dB) */
+          if (self->mono_compat_enabled)
             {
-            }
-          else /* if not muted */
-            {
-              /* apply fader and pan */
-              dsp_mix2 (
+              dsp_make_mono (
                 &self->stereo_out->l->buf[
                   start_frame],
-                &self->stereo_in->l->buf[
-                  start_frame],
-                1.f,
-                amp * calc_l,
-                nframes);
-              dsp_mix2 (
                 &self->stereo_out->r->buf[
-                  start_frame],
-                &self->stereo_in->r->buf[
-                  start_frame],
-                1.f,
-                amp * calc_r,
-                nframes);
+                  start_frame], nframes,
+                  false);
+            }
 
-              /* make mono if mono compat
-               * enabled. equal amplitude is
-               * more suitable for mono
-               * compatibility checking */
-              /* for reference:
-               * equal power sum =
-               * (L+R) * 0.7079 (-3dB)
-               * equal amplitude sum =
-               * (L+R) /2 (-6.02dB) */
-              if (self->mono_compat_enabled)
+          if (effectively_muted)
+            {
+              /* apply mute level */
+              float mute_amp =
+                fader_get_amp (
+                  CONTROL_ROOM->mute_fader);
+              if (mute_amp < 0.00001f)
                 {
-                  dsp_make_mono (
+                  dsp_fill (
                     &self->stereo_out->l->buf[
                       start_frame],
+                    AUDIO_ENGINE->
+                      denormal_prevention_val,
+                    nframes);
+                  dsp_fill (
                     &self->stereo_out->r->buf[
-                      start_frame], nframes,
-                      false);
+                      start_frame],
+                    AUDIO_ENGINE->
+                      denormal_prevention_val,
+                    nframes);
                 }
-            }
-
-#if 0
-          if (self->type ==
-                FADER_TYPE_AUDIO_CHANNEL &&
-              track)
-            {
-              if (fabsf (
-                    self->stereo_out->l->buf[0]) >
-                      0.0001f)
+              else
                 {
-                  g_message ("%s have sound", track->name);
+                  dsp_mul_k2 (
+                    &self->stereo_out->l->buf[
+                      start_frame],
+                    mute_amp, nframes);
+                  dsp_mul_k2 (
+                    &self->stereo_out->r->buf[
+                      start_frame],
+                    mute_amp, nframes);
                 }
             }
-#endif
 
-          /* if not master, no more processing
-           * needed, return */
-          if (self->type ==
-                FADER_TYPE_AUDIO_CHANNEL &&
-              track &&
-              track->type != TRACK_TYPE_MASTER)
+          /* if master or monitor, hard limit the
+           * output */
+          if ((self->type ==
+                 FADER_TYPE_AUDIO_CHANNEL &&
+               track &&
+               track->type == TRACK_TYPE_MASTER) ||
+              self->type == FADER_TYPE_MONITOR)
             {
-              return;
+              dsp_limit1 (
+                &self->stereo_out->l->buf[
+                  start_frame],
+                - 2.f, 2.f, nframes);
+              dsp_limit1 (
+                &self->stereo_out->r->buf[
+                  start_frame],
+                - 2.f, 2.f, nframes);
             }
-
-          /* hard limit the output */
-          dsp_limit1 (
-            &self->stereo_out->l->buf[start_frame],
-            - 2.f, 2.f, nframes);
-          dsp_limit1 (
-            &self->stereo_out->r->buf[start_frame],
-            - 2.f, 2.f, nframes);
         } /* fi not prefader */
     } /* fi monitor/audio fader */
   else if (self->type == FADER_TYPE_MIDI_CHANNEL)

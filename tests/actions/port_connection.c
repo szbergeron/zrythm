@@ -51,6 +51,7 @@ test_modulator_connection (
   PluginSetting * setting =
     test_plugin_manager_get_plugin_setting (
       pl_bundle, pl_uri, with_carla);
+  g_assert_nonnull (setting);
 
   /* fix the descriptor (for some reason lilv
    * reports it as Plugin instead of Instrument if
@@ -152,6 +153,7 @@ _test_port_connection (
   PluginSetting * setting =
     test_plugin_manager_get_plugin_setting (
       pl_bundle, pl_uri, with_carla);
+  g_assert_nonnull (setting);
 
   /* fix the descriptor (for some reason lilv
    * reports it as Plugin instead of Instrument if
@@ -171,7 +173,7 @@ _test_port_connection (
   ua =
     tracklist_selections_action_new_create (
       TRACK_TYPE_AUDIO_BUS, NULL, NULL,
-      TRACKLIST->num_tracks, NULL, 1);
+      TRACKLIST->num_tracks, NULL, 1, -1);
   undo_manager_perform (UNDO_MANAGER, ua);
   Track * target_track =
     TRACKLIST->tracks[TRACKLIST->num_tracks - 1];
@@ -182,7 +184,7 @@ _test_port_connection (
       ua =
         tracklist_selections_action_new_create (
           TRACK_TYPE_INSTRUMENT, setting, NULL,
-          TRACKLIST->num_tracks, NULL, 1);
+          TRACKLIST->num_tracks, NULL, 1, -1);
       undo_manager_perform (UNDO_MANAGER, ua);
     }
   else
@@ -191,7 +193,7 @@ _test_port_connection (
       ua =
         tracklist_selections_action_new_create (
           TRACK_TYPE_AUDIO_BUS, NULL, NULL,
-          TRACKLIST->num_tracks, NULL, 1);
+          TRACKLIST->num_tracks, NULL, 1, -1);
       undo_manager_perform (UNDO_MANAGER, ua);
       ua =
         mixer_selections_action_new_create (

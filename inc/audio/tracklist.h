@@ -431,8 +431,32 @@ tracklist_track_name_is_unique (
 /**
  * Returns if the tracklist has soloed tracks.
  */
-int
+NONNULL
+bool
 tracklist_has_soloed (
+  const Tracklist * self);
+
+/**
+ * Returns if the tracklist has listened tracks.
+ */
+NONNULL
+bool
+tracklist_has_listened (
+  const Tracklist * self);
+
+NONNULL
+int
+tracklist_get_num_muted_tracks (
+  const Tracklist * self);
+
+NONNULL
+int
+tracklist_get_num_soloed_tracks (
+  const Tracklist * self);
+
+NONNULL
+int
+tracklist_get_num_listened_tracks (
   const Tracklist * self);
 
 /**
@@ -472,6 +496,11 @@ void
 tracklist_mark_all_tracks_for_bounce (
   Tracklist * self,
   bool        bounce);
+
+void
+tracklist_get_total_bars (
+  Tracklist * self,
+  int *       total_bars);
 
 void
 tracklist_free (

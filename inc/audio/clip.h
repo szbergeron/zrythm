@@ -28,6 +28,7 @@
 
 #include <stdbool.h>
 
+#include "utils/audio.h"
 #include "utils/types.h"
 #include "utils/yaml.h"
 
@@ -78,6 +79,16 @@ typedef struct AudioClip
    */
   int           samplerate;
 
+  /**
+   * Bit depth of the clip when the clip was
+   * imported into the project.
+   */
+  BitDepth      bit_depth;
+
+  /** Whether the clip should use FLAC when being
+   * serialized. */
+  bool          use_flac;
+
   /** ID in the audio pool. */
   int           pool_id;
 
@@ -108,6 +119,10 @@ audio_clip_fields_schema[] =
     AudioClip, name),
   YAML_FIELD_FLOAT (
     AudioClip, bpm),
+  YAML_FIELD_ENUM (
+    AudioClip, bit_depth, bit_depth_strings),
+  YAML_FIELD_INT (
+    AudioClip, use_flac),
   YAML_FIELD_INT (
     AudioClip, samplerate),
   YAML_FIELD_INT (
@@ -152,6 +167,7 @@ audio_clip_new_from_float_array (
   const float *    arr,
   const long       nframes,
   const channels_t channels,
+  BitDepth         bit_depth,
   const char *     name);
 
 /**
@@ -204,22 +220,43 @@ audio_clip_write_to_file (
  *
  * @param parts If true, only write new data. @see
  *   AudioClip.frames_written.
+ * @param is_backup Whether writing to a backup
+ *   project.
  */
 NONNULL
 void
 audio_clip_write_to_pool (
   AudioClip * self,
-  bool        parts);
+  bool        parts,
+  bool        is_backup);
 
+/**
+ * Gets the path of a clip matching \ref name from
+ * the pool.
+ *
+ * @param use_flac Whether to look for a FLAC file
+ *   instead of a wav file.
+ * @param is_backup Whether writing to a backup
+ *   project.
+ */
 NONNULL
 char *
 audio_clip_get_path_in_pool_from_name (
-  const char * name);
+  const char * name,
+  bool         use_flac,
+  bool         is_backup);
 
+/**
+ * Gets the path of the given clip from the pool.
+ *
+ * @param is_backup Whether writing to a backup
+ *   project.
+ */
 NONNULL
 char *
 audio_clip_get_path_in_pool (
-  AudioClip * self);
+  AudioClip * self,
+  bool        is_backup);
 
 /**
  * Returns whether the clip is used inside the

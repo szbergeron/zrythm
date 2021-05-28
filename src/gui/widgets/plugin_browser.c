@@ -36,7 +36,7 @@
 #include "plugins/plugin_manager.h"
 #include "project.h"
 #include "settings/settings.h"
-#include "utils/err_codes.h"
+#include "utils/error.h"
 #include "utils/flags.h"
 #include "utils/gtk.h"
 #include "utils/objects.h"
@@ -325,6 +325,7 @@ activate_plugin_setting (
   bool setting_created = false;
   if (!setting)
     {
+      g_return_if_fail (descr);
       setting = plugin_setting_new_default (descr);
       setting_created = true;
     }
@@ -335,7 +336,7 @@ activate_plugin_setting (
   UndoableAction * ua =
     tracklist_selections_action_new_create (
       tt, setting, NULL, TRACKLIST->num_tracks,
-      PLAYHEAD, 1);
+      PLAYHEAD, 1, -1);
 
   int err = undo_manager_perform (UNDO_MANAGER, ua);
   if (err)

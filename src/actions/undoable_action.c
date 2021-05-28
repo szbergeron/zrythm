@@ -72,6 +72,122 @@ undoable_action_init_loaded (
 }
 
 /**
+ * Returns whether the total transport bars need to
+ * be recalculated.
+ *
+ * @note Some actions already handle this logic so
+ *   return false here to avoid unnecessary
+ *   calculations.
+ */
+static bool
+need_transport_total_bar_update (
+  UndoableAction * self,
+  bool             _do)
+{
+  switch (self->type)
+    {
+    case UA_ARRANGER_SELECTIONS:
+      {
+        ArrangerSelectionsAction * action =
+          (ArrangerSelectionsAction *) self;
+        if ((action->type == AS_ACTION_CREATE &&
+              _do) ||
+            (action->type == AS_ACTION_DELETE &&
+              !_do) ||
+            (action->type == AS_ACTION_DUPLICATE &&
+              _do) ||
+            (action->type == AS_ACTION_LINK &&
+              _do))
+          {
+            return false;
+          }
+      }
+      break;
+    case UA_TRACKLIST_SELECTIONS:
+      {
+        TracklistSelectionsAction * action =
+          (TracklistSelectionsAction *) self;
+        if (action->type ==
+              TRACKLIST_SELECTIONS_ACTION_EDIT)
+          {
+            if (action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_MUTE ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_SOLO ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_LISTEN ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_VOLUME ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_PAN)
+              {
+                return false;
+              }
+          }
+      }
+      break;
+    default:
+      break;
+    }
+
+  return true;
+}
+
+/**
+ * Returns whether the action requires pausing
+ * the engine.
+ */
+bool
+undoable_action_needs_pause (
+  UndoableAction * self)
+{
+  switch (self->type)
+    {
+    case UA_ARRANGER_SELECTIONS:
+      {
+        ArrangerSelectionsAction * action =
+          (ArrangerSelectionsAction *) self;
+        if (action->type == AS_ACTION_EDIT)
+          {
+            if (action->edit_type ==
+                  ARRANGER_SELECTIONS_ACTION_EDIT_MUTE)
+              {
+                return false;
+              }
+          }
+      }
+      break;
+    case UA_TRACKLIST_SELECTIONS:
+      {
+        TracklistSelectionsAction * action =
+          (TracklistSelectionsAction *) self;
+        if (action->type ==
+              TRACKLIST_SELECTIONS_ACTION_EDIT)
+          {
+            if (action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_MUTE ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_SOLO ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_LISTEN ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_VOLUME ||
+                action->edit_type ==
+                  EDIT_TRACK_ACTION_TYPE_PAN)
+              {
+                return false;
+              }
+          }
+      }
+      break;
+    default:
+      break;
+    }
+
+  return true;
+}
+
+/**
  * Performs the action.
  *
  * @note Only to be called by undo manager.
@@ -87,11 +203,14 @@ undoable_action_do (UndoableAction * self)
   g_debug ("lock acquired");
 #endif
 
-  /* stop engine and give it some time to stop
-   * running */
   EngineState state;
-  engine_wait_for_pause (
-    AUDIO_ENGINE, &state, F_NO_FORCE);
+  if (undoable_action_needs_pause (self))
+    {
+      /* stop engine and give it some time to stop
+       * running */
+      engine_wait_for_pause (
+        AUDIO_ENGINE, &state, F_NO_FORCE);
+    }
 
   int ret = 0;
 
@@ -148,8 +267,18 @@ undoable_action_do (UndoableAction * self)
   g_debug ("lock released");
 #endif
 
-  /* restart engine */
-  engine_resume (AUDIO_ENGINE, &state);
+  if (need_transport_total_bar_update (self, true))
+    {
+      /* recalculate transport bars */
+      transport_recalculate_total_bars (
+        TRANSPORT, NULL);
+    }
+
+  if (undoable_action_needs_pause (self))
+    {
+      /* restart engine */
+      engine_resume (AUDIO_ENGINE, &state);
+    }
 
   return ret;
 }
@@ -164,11 +293,14 @@ undoable_action_undo (UndoableAction * self)
 {
   /*zix_sem_wait (&AUDIO_ENGINE->port_operation_lock);*/
 
-  /* stop engine and give it some time to stop
-   * running */
   EngineState state;
-  engine_wait_for_pause (
-    AUDIO_ENGINE, &state, F_NO_FORCE);
+  if (undoable_action_needs_pause (self))
+    {
+      /* stop engine and give it some time to stop
+       * running */
+      engine_wait_for_pause (
+        AUDIO_ENGINE, &state, F_NO_FORCE);
+    }
 
   int ret = 0;
 
@@ -222,8 +354,18 @@ undoable_action_undo (UndoableAction * self)
 
   /*zix_sem_post (&AUDIO_ENGINE->port_operation_lock);*/
 
-  /* restart engine */
-  engine_resume (AUDIO_ENGINE, &state);
+  if (need_transport_total_bar_update (self, false))
+    {
+      /* recalculate transport bars */
+      transport_recalculate_total_bars (
+        TRANSPORT, NULL);
+    }
+
+  if (undoable_action_needs_pause (self))
+    {
+      /* restart engine */
+      engine_resume (AUDIO_ENGINE, &state);
+    }
 
   return ret;
 }

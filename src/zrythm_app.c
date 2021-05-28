@@ -495,20 +495,20 @@ static void on_prompt_for_project (
               NULL, flags,
               GTK_MESSAGE_INFO,
               GTK_BUTTONS_OK,
-"Copyright (C) 2018-2020 The Zrythm contributors\n"
+"Copyright © " COPYRIGHT_YEARS " " COPYRIGHT_NAME "\n"
 "\n"
-"Zrythm is free software: you can redistribute it and/or modify\n"
+PROGRAM_NAME " is free software: you can redistribute it and/or modify\n"
 "it under the terms of the GNU Affero General Public License as published by\n"
 "the Free Software Foundation, either version 3 of the License, or\n"
 "(at your option) any later version.\n"
 "\n"
-"Zrythm is distributed in the hope that it will be useful,\n"
+PROGRAM_NAME " is distributed in the hope that it will be useful,\n"
 "but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
 "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
 "GNU Affero General Public License for more details.\n"
 "\n"
 "You should have received a copy of the GNU Affero General Public License\n"
-"along with Zrythm.  If not, see <https://www.gnu.org/licenses/>."
+"along with " PROGRAM_NAME ".  If not, see <https://www.gnu.org/licenses/>."
 #if !defined(HAVE_CUSTOM_NAME) || !defined(HAVE_CUSTOM_LOGO_AND_SPLASH)
 "\n\nZrythm and the Zrythm logo are trademarks of Alexandros Theodotou"
 #endif
@@ -698,6 +698,7 @@ print_gdk_pixbuf_format_info (
 
 static void
 load_icon (
+  GtkSettings *  default_settings,
   GtkIconTheme * icon_theme,
   const char *   icon_name)
 {
@@ -709,6 +710,22 @@ load_icon (
     gtk_icon_theme_load_icon (
       icon_theme, icon_name, 48, 0, &err);
   g_message ("icon: %p", icon);
+  if (err)
+    {
+      /* fallback to zrythm-dark and try again */
+      g_warning (
+        "icon '%s' not found, falling back to "
+        "zrythm-dark", icon_name);
+      g_object_set (
+        default_settings,
+        "gtk-icon-theme-name", "zrythm-dark", NULL);
+      err = NULL;
+      icon =
+        gtk_icon_theme_load_icon (
+          icon_theme, icon_name, 48, 0, &err);
+      g_message ("icon: %p", icon);
+    }
+
   if (err)
     {
       char err_msg[600];
@@ -770,7 +787,8 @@ lock_memory (void)
             "privileges to allow %s to lock "
             "unlimited memory. This may cause "
             "audio dropouts. Please refer to "
-            "the user manual for details.",
+            "the 'Getting Started' section in the "
+            "user manual for details.",
             PROGRAM_NAME);
         }
     }
@@ -789,10 +807,16 @@ lock_memory (void)
       g_message ("Locking down memory...");
       if (mlockall (MCL_CURRENT | MCL_FUTURE))
         {
+#ifdef __APPLE__
+          g_warning (
+            "Cannot lock down memory: %s",
+            strerror (errno));
+#else
           ui_show_message_printf (
             NULL, GTK_MESSAGE_WARNING,
             "Cannot lock down memory: %s",
             strerror (errno));
+#endif
         }
     }
 #endif
@@ -923,16 +947,19 @@ zrythm_app_startup (
       exe_path ? exe_path : self->argv[0], true,
       false, true);
 
+  const char * copyright_line =
+    "Copyright (C) " COPYRIGHT_YEARS " "
+    COPYRIGHT_NAME;
   char * ver = zrythm_get_version (0);
   fprintf (
     stdout,
-    _("%s-%s Copyright (C) 2018-2021 The Zrythm contributors\n\n"
+    _("%s-%s %s\n\n"
     "%s comes with ABSOLUTELY NO WARRANTY!\n\n"
     "This is free software, and you are welcome to redistribute it\n"
     "under certain conditions. See the file `COPYING' for details.\n\n"
     "Write comments and bugs to %s\n"
     "Support this project at https://liberapay.com/Zrythm\n\n"),
-    PROGRAM_NAME, ver, PROGRAM_NAME,
+    PROGRAM_NAME, ver, copyright_line, PROGRAM_NAME,
     ISSUE_TRACKER_URL);
   g_free (ver);
 
@@ -1011,6 +1038,7 @@ zrythm_app_startup (
 #ifdef HAVE_GTK_SOURCE_VIEW_4
   gtk_source_init ();
 #endif
+  z_gtk_source_language_manager_get ();
 
   G_APPLICATION_CLASS (zrythm_app_parent_class)->
     startup (G_APPLICATION (self));
@@ -1062,9 +1090,6 @@ zrythm_app_startup (
   g_object_set (
     self->default_settings,
     "gtk-cursor-theme-name", "Adwaita", NULL);
-  /*g_object_set (*/
-    /*self->default_settings,*/
-    /*"gtk-icon-theme-name", "breeze-dark", NULL);*/
 #elif defined(__APPLE__)
   g_object_set (
     self->default_settings,
@@ -1085,9 +1110,13 @@ zrythm_app_startup (
 
   GtkIconTheme * icon_theme =
     gtk_icon_theme_get_default ();
+  char * icon_theme_name =
+    g_settings_get_string (
+      S_P_UI_GENERAL, "icon-theme");
   g_object_set (
     self->default_settings, "gtk-icon-theme-name",
-    "zrythm-dark", NULL);
+    icon_theme_name, NULL);
+  g_free_and_null (icon_theme_name);
 
   /* prepend freedesktop system icons to search
    * path, just in case */
@@ -1158,9 +1187,12 @@ zrythm_app_startup (
 
   /* try to load some icons */
   /* zrythm */
-  load_icon (icon_theme, "solo");
+  load_icon (
+    self->default_settings, icon_theme, "solo");
   /* breeze dark */
-  load_icon (icon_theme, "node-type-cusp");
+  load_icon (
+    self->default_settings, icon_theme,
+    "node-type-cusp");
 
   g_message ("Setting gtk icon theme resource paths...");
   gtk_icon_theme_add_resource_path (
@@ -1188,28 +1220,50 @@ zrythm_app_startup (
     /*1);*/
   g_message ("Resource paths set");
 
-  /* set default css provider */
+  /* get css theme file path */
   GtkCssProvider * css_provider =
     gtk_css_provider_new();
   user_themes_dir =
-    zrythm_get_dir (ZRYTHM_DIR_USER_THEMES);
+    zrythm_get_dir (ZRYTHM_DIR_USER_THEMES_CSS);
+  char * css_theme_file =
+    g_settings_get_string (
+      S_P_UI_GENERAL, "css-theme");
   char * css_theme_path =
     g_build_filename (
-      user_themes_dir, "theme.css", NULL);
+      user_themes_dir, css_theme_file, NULL);
   g_free (user_themes_dir);
   if (!g_file_test (
          css_theme_path, G_FILE_TEST_EXISTS))
     {
+      /* fallback to theme in system path */
       g_free (css_theme_path);
       system_themes_dir =
         zrythm_get_dir (
-          ZRYTHM_DIR_SYSTEM_THEMESDIR);
+          ZRYTHM_DIR_SYSTEM_THEMES_CSS_DIR);
+      css_theme_path =
+        g_build_filename (
+          system_themes_dir,
+          css_theme_file, NULL);
+      g_free (system_themes_dir);
+    }
+  if (!g_file_test (
+         css_theme_path, G_FILE_TEST_EXISTS))
+    {
+      /* fallback to zrythm-theme.css */
+      g_free (css_theme_path);
+      system_themes_dir =
+        zrythm_get_dir (
+          ZRYTHM_DIR_SYSTEM_THEMES_CSS_DIR);
       css_theme_path =
         g_build_filename (
           system_themes_dir,
           "zrythm-theme.css", NULL);
       g_free (system_themes_dir);
     }
+  g_free (css_theme_file);
+  g_message ("CSS theme path: %s", css_theme_path);
+
+  /* set default css provider */
   GError * err = NULL;
   gtk_css_provider_load_from_path (
     css_provider, css_theme_path, &err);
@@ -1612,7 +1666,7 @@ print_version (
     stdout,
     "%s\n%s\n%s\n%s\n",
     ver_with_caps,
-    "Copyright © 2018-2021 The Zrythm contributors",
+    "Copyright © " COPYRIGHT_YEARS " " COPYRIGHT_NAME,
     "This is free software; see the source for copying conditions.",
     "There is NO "
     "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.");

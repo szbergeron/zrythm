@@ -298,6 +298,9 @@ init_symap (
     bufsz_minBlockLength,
     LV2_BUF_SIZE__minBlockLength);
   SYMAP_MAP (
+    bufsz_nominalBlockLength,
+    LV2_BUF_SIZE__nominalBlockLength);
+  SYMAP_MAP (
     bufsz_sequenceSize,
     LV2_BUF_SIZE__sequenceSize);
   SYMAP_MAP ( log_Error, LV2_LOG__Error);
@@ -314,6 +317,7 @@ init_symap (
   SYMAP_MAP (patch_property, LV2_PATCH__property);
   SYMAP_MAP (patch_value, LV2_PATCH__value);
   SYMAP_MAP (time_Position, LV2_TIME__Position);
+  SYMAP_MAP (time_bar, LV2_TIME__bar);
   SYMAP_MAP (time_barBeat, LV2_TIME__barBeat);
   SYMAP_MAP (time_beatUnit, LV2_TIME__beatUnit);
   SYMAP_MAP (
@@ -436,8 +440,9 @@ get_vst_paths (
 #elif defined (__APPLE__)
   char ** paths =
     g_strsplit (
-      "/Library/Audio/Plug-ins/VST" PATH_SPLIT,
-      PATH_SPLIT, -1);
+      "/Library/Audio/Plug-ins/VST"
+        G_SEARCHPATH_SEPARATOR_S,
+      G_SEARCHPATH_SEPARATOR_S, -1);
 #else
   char * vst_path =
     g_strdup (getenv ("VST_PATH"));
@@ -475,7 +480,7 @@ get_vst_paths (
     }
   g_return_val_if_fail (vst_path, NULL);
   char ** paths =
-    g_strsplit (vst_path, PATH_SPLIT, 0);
+    g_strsplit (vst_path, G_SEARCHPATH_SEPARATOR_S, 0);
   g_free (vst_path);
 #endif // __APPLE__
 
@@ -492,14 +497,14 @@ get_vst3_paths (
   return
     g_strsplit (
       "C:\\Program Files\\Common Files\\VST3"
-      PATH_SPLIT
+      G_SEARCHPATH_SEPARATOR_S
       "C:\\Program Files (x86)\\Common Files\\VST3",
-      PATH_SPLIT, 0);
+      G_SEARCHPATH_SEPARATOR_S, 0);
 #elif defined (__APPLE__)
   return
     g_strsplit (
-      "/Library/Audio/Plug-ins/VST3" PATH_SPLIT,
-      PATH_SPLIT, -1);
+      "/Library/Audio/Plug-ins/VST3" G_SEARCHPATH_SEPARATOR_S,
+      G_SEARCHPATH_SEPARATOR_S, -1);
 #else
   char * vst_path =
     g_strdup (getenv ("VST3_PATH"));
@@ -537,7 +542,7 @@ get_vst3_paths (
     }
   g_return_val_if_fail (vst_path, NULL);
   char ** paths =
-    g_strsplit (vst_path, PATH_SPLIT, 0);
+    g_strsplit (vst_path, G_SEARCHPATH_SEPARATOR_S, 0);
   g_free (vst_path);
   return paths;
 #endif // __APPLE__
@@ -548,6 +553,7 @@ get_vst3_count (
   PluginManager * self)
 {
   char ** paths = get_vst3_paths (self);
+  g_return_val_if_fail (paths, 0);
   int path_idx = 0;
   char * path;
   int count = 0;
@@ -581,6 +587,7 @@ get_vst_count (
   PluginManager * self)
 {
   char ** paths = get_vst_paths (self);
+  g_return_val_if_fail (paths, 0);
   int path_idx = 0;
   char * path;
   int count = 0;
@@ -621,7 +628,7 @@ get_sf_paths (
   if (ZRYTHM_TESTING)
     {
       paths =
-        g_strsplit (PATH_SPLIT, PATH_SPLIT, -1);
+        g_strsplit (G_SEARCHPATH_SEPARATOR_S, G_SEARCHPATH_SEPARATOR_S, -1);
     }
   else
     {
@@ -644,6 +651,7 @@ get_sf_count (
 {
   char ** paths =
     get_sf_paths (self, prot == PROT_SF2);
+  g_return_val_if_fail (paths, 0);
   int path_idx = 0;
   char * path;
   int count = 0;
@@ -711,7 +719,7 @@ get_dssi_paths (
         dssi_path);
     }
   char ** paths =
-    g_strsplit (dssi_path, PATH_SPLIT, 0);
+    g_strsplit (dssi_path, G_SEARCHPATH_SEPARATOR_S, 0);
   g_free (dssi_path);
 
   g_debug ("%s: done", __func__);
@@ -757,7 +765,7 @@ get_ladspa_paths (
         ladspa_path);
     }
   char ** paths =
-    g_strsplit (ladspa_path, PATH_SPLIT, 0);
+    g_strsplit (ladspa_path, G_SEARCHPATH_SEPARATOR_S, 0);
   g_free (ladspa_path);
 
   g_debug ("%s: done", __func__);

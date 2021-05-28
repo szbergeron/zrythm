@@ -398,6 +398,10 @@ DECLARE_SIMPLE (activate_solo_selected_tracks);
 DECLARE_SIMPLE (activate_unsolo_selected_tracks);
 DECLARE_SIMPLE (activate_mute_selected_tracks);
 DECLARE_SIMPLE (activate_unmute_selected_tracks);
+DECLARE_SIMPLE (activate_listen_selected_tracks);
+DECLARE_SIMPLE (activate_unlisten_selected_tracks);
+DECLARE_SIMPLE (activate_enable_selected_tracks);
+DECLARE_SIMPLE (activate_disable_selected_tracks);
 DECLARE_SIMPLE (activate_change_track_color);
 
 void
@@ -493,6 +497,11 @@ DECLARE_SIMPLE (
   activate_toggle_editor_event_viewer);
 DECLARE_SIMPLE (activate_insert_silence);
 DECLARE_SIMPLE (activate_remove_range);
+
+DECLARE_SIMPLE (change_state_timeline_playhead_scroll_edges);
+DECLARE_SIMPLE (change_state_timeline_playhead_follow);
+DECLARE_SIMPLE (change_state_editor_playhead_scroll_edges);
+DECLARE_SIMPLE (change_state_editor_playhead_follow);
 
 /* Editor functions. */
 DECLARE_SIMPLE (activate_editor_function);

@@ -16,6 +16,7 @@
 # along with Zrythm.  If not, see <https://www.gnu.org/licenses/>.
 
 subdir ('midilib')
+subdir ('nanovg')
 subdir ('weakjack')
 subdir ('whereami')
 subdir ('zix')

@@ -81,7 +81,7 @@ on_path_entry_changed (
     gtk_editable_get_chars (editable, 0, -1);
   g_return_if_fail (str);
   char ** split_str =
-    g_strsplit (str, PATH_SPLIT, 0);
+    g_strsplit (str, G_SEARCHPATH_SEPARATOR_S, 0);
   g_settings_set_strv (
     data->info->settings, data->key,
     (const char * const *) split_str);
@@ -159,7 +159,7 @@ typedef enum PathType
   /** Not a path. */
   PATH_TYPE_NONE,
 
-  /** Single entry separated by PATH_SPLIT. */
+  /** Single entry separated by G_SEARCHPATH_SEPARATOR_S. */
   PATH_TYPE_ENTRY,
 
   /** File chooser button. */
@@ -292,6 +292,10 @@ get_range_vals (
         g_variant_get_double (current_var);
     }
 #undef TYPE_EQUALS
+
+  g_variant_unref (range_vals);
+  g_variant_unref (lower_var);
+  g_variant_unref (upper_var);
 }
 
 static GtkWidget *
@@ -400,7 +404,9 @@ make_control (
         g_object_new (
           ACTIVE_HARDWARE_MB_WIDGET_TYPE, NULL);
       active_hardware_mb_widget_setup (
-        Z_ACTIVE_HARDWARE_MB_WIDGET (widget), false);
+        Z_ACTIVE_HARDWARE_MB_WIDGET (widget),
+        F_INPUT, F_NOT_MIDI, S_P_GENERAL_ENGINE,
+        "audio-inputs");
     }
   else if (KEY_IS (
         "General", "Engine",
@@ -410,7 +416,9 @@ make_control (
         g_object_new (
           ACTIVE_HARDWARE_MB_WIDGET_TYPE, NULL);
       active_hardware_mb_widget_setup (
-        Z_ACTIVE_HARDWARE_MB_WIDGET (widget), true);
+        Z_ACTIVE_HARDWARE_MB_WIDGET (widget),
+        F_INPUT, F_MIDI, S_P_GENERAL_ENGINE,
+        "midi-controllers");
     }
   else if (KEY_IS ("UI", "General", "font-scale"))
     {
@@ -644,7 +652,7 @@ make_control (
             g_settings_get_strv (
               info->settings, key);
           char * joined_str =
-            g_strjoinv (PATH_SPLIT, paths);
+            g_strjoinv (G_SEARCHPATH_SEPARATOR_S, paths);
           gtk_entry_set_text (
             GTK_ENTRY (widget), joined_str);
           g_free (joined_str);

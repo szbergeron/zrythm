@@ -566,12 +566,14 @@ typedef struct Port
   int                 magic;
 } Port;
 
+#if 0
 static const cyaml_strval_t
 port_internal_type_strings[] =
 {
   { "LV2 port",       INTERNAL_LV2_PORT    },
   { "JACK port",      INTERNAL_JACK_PORT   },
 };
+#endif
 
 static const cyaml_schema_field_t
 port_fields_schema[] =
@@ -625,10 +627,12 @@ port_fields_schema[] =
     CYAML_FLAG_POINTER | CYAML_FLAG_OPTIONAL,
     Port, src_enabled, num_srcs,
     &int_schema, 0, CYAML_UNLIMITED),
+#if 0
   CYAML_FIELD_ENUM (
     "internal_type", CYAML_FLAG_DEFAULT,
     Port, internal_type, port_internal_type_strings,
     CYAML_ARRAY_LEN (port_internal_type_strings)),
+#endif
   YAML_FIELD_FLOAT (
     Port, control),
   YAML_FIELD_FLOAT (
@@ -832,6 +836,16 @@ port_receive_audio_data_from_jack (
 #endif
 
 /**
+ * If MIDI port, returns if there are any events,
+ * if audio port, returns if there is sound in the
+ * buffer.
+ */
+NONNULL
+bool
+port_has_sound (
+  Port * self);
+
+/**
  * Copies a full designation of \p self in the
  * format "Track/Port" or "Track/Plugin/Port" in
  * \p buf.
@@ -905,6 +919,14 @@ port_get_dest_index (
       if (self->dests[i] == dest)
         return i;
     }
+
+  char des_src[800];
+  char des_dest[800];
+  port_get_full_designation (dest, des_dest);
+  port_get_full_designation (self, des_src);
+  g_critical (
+    "failed to get dest index for port %s in %s",
+    des_dest, des_src);
   g_return_val_if_reached (-1);
 }
 

@@ -458,6 +458,28 @@ main_window_widget_init (MainWindowWidget * self)
     { "insert-silence", activate_insert_silence },
     { "remove-range", activate_remove_range },
 
+    /* playhead actions */
+    { "timeline-playhead-scroll-edges", NULL, NULL,
+      g_settings_get_boolean (
+        S_UI, "timeline-playhead-scroll-edges") ?
+        "true" : "false",
+      change_state_timeline_playhead_scroll_edges },
+    { "timeline-playhead-follow", NULL, NULL,
+      g_settings_get_boolean (
+        S_UI, "timeline-playhead-follow") ?
+        "true" : "false",
+      change_state_timeline_playhead_follow },
+    { "editor-playhead-scroll-edges", NULL, NULL,
+      g_settings_get_boolean (
+        S_UI, "editor-playhead-scroll-edges") ?
+        "true" : "false",
+      change_state_editor_playhead_scroll_edges },
+    { "editor-playhead-follow", NULL, NULL,
+      g_settings_get_boolean (
+        S_UI, "editor-playhead-follow") ?
+        "true" : "false",
+      change_state_editor_playhead_follow },
+
     /* merge actions */
     { "merge-selection", activate_merge_selection },
 
@@ -535,6 +557,14 @@ main_window_widget_init (MainWindowWidget * self)
       activate_mute_selected_tracks },
     { "unmute-selected-tracks",
       activate_unmute_selected_tracks },
+    { "listen-selected-tracks",
+      activate_listen_selected_tracks },
+    { "unlisten-selected-tracks",
+      activate_unlisten_selected_tracks },
+    { "enable-selected-tracks",
+      activate_enable_selected_tracks },
+    { "disable-selected-tracks",
+      activate_disable_selected_tracks },
     { "change-track-color",
       activate_change_track_color },
 

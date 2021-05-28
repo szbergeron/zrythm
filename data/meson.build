@@ -1,4 +1,4 @@
-# Copyright (C) 2019-2020 Alexandros Theodotou <alex at zrythm dot org>
+# Copyright (C) 2019-2021 Alexandros Theodotou <alex at zrythm dot org>
 #
 # This file is part of Zrythm
 #
@@ -49,7 +49,7 @@ zrythm_launcher_config.set (
   'PROGRAM_NAME_LOWERCASE', prog_name_lowercase)
 
 # install desktop file and launcher scripts
-if os_gnu or os_freebsd
+if os_gnu or os_freebsd or os_darwin
   zrythm_launcher = configure_file (
     input: 'zrythm_launch.in',
     output: prog_name_lowercase + '_launch',
@@ -57,7 +57,9 @@ if os_gnu or os_freebsd
     install: true,
     install_dir: bindir,
     install_mode: 'r-xr-xr-x')
+endif
 
+if os_gnu or os_freebsd
   zrythm_gdb = configure_file (
     input: 'zrythm_gdb.in',
     output: prog_name_lowercase + '_gdb',
@@ -124,11 +126,8 @@ install_data (
   install_dir: sourceviewstylesdir,
   rename: 'monokai-extended-zrythm.xml')
 
-# theme
-install_data (
-  'theme.css',
-  install_dir: themesdir,
-  rename: prog_name_lowercase + '-theme.css')
+# css themes
+subdir ('css-themes')
 
 subdir ('scripts')
 subdir ('windows')

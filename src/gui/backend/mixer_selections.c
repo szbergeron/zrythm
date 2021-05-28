@@ -176,7 +176,7 @@ mixer_selections_get_lowest_slot (
 
   for (int i = 0; i < ms->num_slots; i++)
     {
-      if (ms->slots[i] < max)
+      if (ms->slots[i] > max)
         max = ms->slots[i];
     }
 
@@ -279,7 +279,7 @@ mixer_selections_remove_slot (
   MixerSelections * ms,
   int               slot,
   PluginSlotType    type,
-  int               publish_events)
+  bool              publish_events)
 {
   g_message ("removing slot %d", slot);
   array_delete_primitive (
@@ -402,6 +402,51 @@ mixer_selections_get_first_plugin (
   return NULL;
 }
 
+bool
+mixer_selections_validate (
+  MixerSelections * self)
+{
+  if (!self->has_any)
+    return true;
+
+  Track * track =
+    mixer_selections_get_track (self);
+  g_return_val_if_fail (
+    IS_TRACK_AND_NONNULL (track), false);
+
+  for (int i = 0; i < self->num_slots; i++)
+    {
+      Plugin * pl = NULL;
+      switch (self->type)
+        {
+        case PLUGIN_SLOT_INSTRUMENT:
+          pl = track->channel->instrument;
+          break;
+        case PLUGIN_SLOT_INSERT:
+          pl =
+            track->channel->inserts[
+              self->slots[i]];
+          break;
+        case PLUGIN_SLOT_MIDI_FX:
+          pl =
+            track->channel->midi_fx[
+              self->slots[i]];
+          break;
+        case PLUGIN_SLOT_MODULATOR:
+          pl = track->modulators[self->slots[i]];
+          break;
+        default:
+          g_return_val_if_reached (false);
+          break;
+        }
+
+      g_return_val_if_fail (
+        IS_PLUGIN_AND_NONNULL (pl), false);
+    }
+
+  return true;
+}
+
 /**
  * Clears selections.
  */
@@ -482,20 +527,55 @@ mixer_selections_clone (
   return ms;
 }
 
+void
+mixer_selections_post_deserialize (
+  MixerSelections * self)
+{
+  for (int i = 0; i < self->num_slots; i++)
+    {
+      plugin_init_loaded (
+        self->plugins[i], F_NOT_PROJECT);
+    }
+
+  /* sort the selections */
+  mixer_selections_sort (self, F_ASCENDING);
+}
+
+/**
+ * Returns whether the selections can be pasted to
+ * MixerWidget.paste_slot.
+ */
+bool
+mixer_selections_can_be_pasted (
+  MixerSelections * self,
+  Channel *         ch,
+  PluginSlotType    type,
+  int               slot)
+{
+  int lowest =
+    mixer_selections_get_lowest_slot (self);
+  int highest =
+    mixer_selections_get_highest_slot (self);
+  int delta = lowest - highest;
+
+  return slot + delta < STRIP_SIZE;
+}
+
 /**
  * Paste the selections starting at the slot in the
  * given channel.
  */
 void
 mixer_selections_paste_to_slot (
-  MixerSelections * ts,
+  MixerSelections * ms,
   Channel *         ch,
-  PluginSlotType   type,
+  PluginSlotType    type,
   int               slot)
 {
-  g_warn_if_reached ();
-
-  /* TODO */
+  UndoableAction * ua =
+    mixer_selections_action_new_paste (
+      ms, type, ch->track_pos, slot);
+  undo_manager_perform (UNDO_MANAGER, ua);
 }
 
 void

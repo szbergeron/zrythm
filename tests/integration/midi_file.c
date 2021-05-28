@@ -54,11 +54,7 @@ test_midi_file_playback ()
       F_WITH_LANE);
   tracklist_append_track (
     TRACKLIST, midi_track, 0, 1);
-  Port * port =
-    port_new_with_type (
-      TYPE_EVENT, FLOW_INPUT, "Test Port");
-  MidiEvents * events =
-    midi_events_new (port);
+  MidiEvents * events = midi_events_new ();
 
   char ** midi_files =
     io_get_files_in_dir_ending_in (
@@ -89,7 +85,7 @@ test_midi_file_playback ()
       UndoableAction * ua =
         tracklist_selections_action_new_create (
           TRACK_TYPE_MIDI, NULL, file,
-          TRACKLIST->num_tracks, PLAYHEAD, 1);
+          TRACKLIST->num_tracks, PLAYHEAD, 1, -1);
       undo_manager_perform (
         UNDO_MANAGER, ua);
       supported_file_free (file);

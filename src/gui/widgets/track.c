@@ -61,6 +61,7 @@
 #include "utils/flags.h"
 #include "utils/gtk.h"
 #include "utils/math.h"
+#include "utils/objects.h"
 #include "utils/resources.h"
 #include "utils/string.h"
 #include "utils/symap.h"
@@ -78,6 +79,7 @@ G_DEFINE_TYPE (
 #define ICON_NAME_RECORD "media-record"
 #define ICON_NAME_SOLO "solo"
 #define ICON_NAME_MUTE "mute"
+#define ICON_NAME_LISTEN "listen"
 #define ICON_NAME_SHOW_UI "synth"
 #define ICON_NAME_SHOW_AUTOMATION_LANES \
   "node-type-cusp"
@@ -291,11 +293,20 @@ draw_color_area (
   GdkRectangle * rect,
   int            height)
 {
+  Track * track = self->track;
+
   cairo_surface_t * surface =
     z_cairo_get_surface_from_icon_name (
-      self->track->icon_name, 16, 0);
+      track->icon_name, 16, 0);
 
+  /* draw background */
   GdkRGBA bg_color = self->track->color;
+  if (!track_is_enabled (track))
+    {
+      bg_color.red = 0.5;
+      bg_color.green = 0.5;
+      bg_color.blue = 0.5;
+    }
   if (self->color_area_hovered)
     {
       color_brighten_default (&bg_color);
@@ -307,7 +318,7 @@ draw_color_area (
 
   GdkRGBA c2, c3;
   ui_get_contrast_color (
-    &self->track->color, &c2);
+    &track->color, &c2);
   ui_get_contrast_color (
     &c2, &c3);
 
@@ -330,92 +341,6 @@ draw_color_area (
   cairo_mask_surface (
     cr, surface, 1, 1);
   cairo_fill (cr);
-
-#if 0
-  /* draw meters */
-  cairo_set_source_rgba (cr, 0, 1, 0.2, 1.0);
-  int height = rect->height;
-  switch (self->track->in_signal_type)
-    {
-    case TYPE_AUDIO:
-      {
-      float rms =
-        port_get_rms_db (
-          self->track->processor.stereo_in->l, 1);
-      sample_t amp =
-        math_dbfs_to_amp (rms);
-      sample_t fader_val =
-        math_get_fader_val_from_amp (amp);
-      fader_val *= (sample_t) height;
-      cairo_rectangle (
-        cr, (COLOR_AREA_WIDTH - 4),
-        (height - (int) fader_val),
-        2, fader_val);
-      cairo_fill (cr);
-
-      rms =
-        port_get_rms_db (
-          self->track->processor.stereo_in->r, 1);
-      amp =
-        math_dbfs_to_amp (rms);
-      fader_val =
-        math_get_fader_val_from_amp (amp);
-      fader_val *= (sample_t) height;
-      cairo_rectangle (
-        cr, (COLOR_AREA_WIDTH - 2),
-        (height - (int) fader_val),
-        2, fader_val);
-      cairo_fill (cr);
-      }
-      break;
-    case TYPE_EVENT:
-      {
-        int has_midi_events = 0;
-        MidiEvent event;
-        float val = 0.f;
-        if (!self->track->processor.midi_out)
-          break;
-        Port * port =
-          self->track->processor.midi_out;
-        while (
-          zix_ring_read (
-            port->midi_ring, &event,
-            sizeof (MidiEvent)) > 0)
-          {
-            has_midi_events = 1;
-          }
-
-        if (has_midi_events)
-          {
-            self->last_midi_in_trigger_time =
-              g_get_real_time ();
-            val = 1.f;
-          }
-        else
-          {
-            gint64 time_diff =
-              g_get_real_time () -
-              self->last_midi_in_trigger_time;
-            if ((float) time_diff < MAX_TIME)
-              {
-                val =
-                  1.f - (float) time_diff / MAX_TIME;
-              }
-            else
-              val = 0.f;
-          }
-        val *= height;
-        cairo_rectangle (
-          cr, (COLOR_AREA_WIDTH - 4),
-          (height - (int) val),
-          4, val);
-        cairo_fill (cr);
-      }
-      break;
-    default:
-      break;
-    }
-#endif
 }
 
 static void
@@ -424,8 +349,14 @@ draw_name (
   cairo_t *     cr)
 {
   /* draw text */
-  cairo_set_source_rgba (
-    cr, 1, 1, 1, 1);
+  if (track_is_enabled (self->track))
+    {
+      cairo_set_source_rgba (cr, 1, 1, 1, 1);
+    }
+  else
+    {
+      cairo_set_source_rgba (cr, 0.5, 0.5, 0.5, 1);
+    }
   cairo_move_to (cr, 22, 2);
   PangoLayout * layout = self->layout;
   pango_layout_set_text (
@@ -511,6 +442,12 @@ draw_buttons (
       else if (CB_ICON_IS (MUTE) &&
                track_get_muted (
                  track))
+        {
+          state =
+            CUSTOM_BUTTON_WIDGET_STATE_TOGGLED;
+        }
+      else if (CB_ICON_IS (LISTEN) &&
+               track_get_listened (track))
         {
           state =
             CUSTOM_BUTTON_WIDGET_STATE_TOGGLED;
@@ -1201,6 +1138,17 @@ set_tooltip_from_button (
           SET_TOOLTIP (_("Mute"));
         }
     }
+  else if (CB_ICON_IS (LISTEN))
+    {
+      if (track_get_muted (self->track))
+        {
+          SET_TOOLTIP (_("Unlisten"));
+        }
+      else
+        {
+          SET_TOOLTIP (_("Listen"));
+        }
+    }
   else if (CB_ICON_IS (MONO_COMPAT))
     {
       SET_TOOLTIP (_("Mono compatibility"));
@@ -1492,12 +1440,16 @@ track_widget_redraw_meters (
 
   if (gtk_widget_get_visible (
         GTK_WIDGET (self->meter_l)))
-    gtk_widget_queue_draw (
-      GTK_WIDGET (self->meter_l));
+    {
+      gtk_widget_queue_draw (
+        GTK_WIDGET (self->meter_l));
+    }
   if (gtk_widget_get_visible (
         GTK_WIDGET (self->meter_r)))
-    gtk_widget_queue_draw (
-      GTK_WIDGET (self->meter_r));
+    {
+      gtk_widget_queue_draw (
+        GTK_WIDGET (self->meter_r));
+    }
 }
 
 /**
@@ -1780,7 +1732,7 @@ show_context_menu (
         track);
     }
 
-  /* add solo/mute */
+  /* add solo/mute/listen */
   if (track_type_has_channel (track->type))
     {
       ADD_SEPARATOR;
@@ -1822,6 +1774,48 @@ show_context_menu (
               "win.unmute-selected-tracks");
           APPEND (menuitem);
         }
+
+      if (tracklist_selections_contains_listened_track (
+            TRACKLIST_SELECTIONS, F_NO_LISTEN))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Listen"), ICON_NAME_LISTEN,
+              F_NO_TOGGLE,
+              "win.listen-selected-tracks");
+          APPEND (menuitem);
+        }
+      if (tracklist_selections_contains_listened_track (
+            TRACKLIST_SELECTIONS, F_LISTEN))
+        {
+          menuitem =
+            z_gtk_create_menu_item (
+              _("Unlisten"), "unlisten",
+              F_NO_TOGGLE,
+              "win.unlisten-selected-tracks");
+          APPEND (menuitem);
+        }
+    }
+
+  /* add enable/disable */
+  if (tracklist_selections_contains_enabled_track (
+        TRACKLIST_SELECTIONS, F_ENABLED))
+    {
+      menuitem =
+        z_gtk_create_menu_item (
+          _("Disable"), "offline",
+          F_NO_TOGGLE,
+          "win.disable-selected-tracks");
+      APPEND (menuitem);
+    }
+  else
+    {
+      menuitem =
+        z_gtk_create_menu_item (
+          _("Enable"), "online",
+          F_NO_TOGGLE,
+          "win.enable-selected-tracks");
+      APPEND (menuitem);
     }
 
   ADD_SEPARATOR;
@@ -1892,8 +1886,7 @@ show_context_menu (
               GTK_CHECK_MENU_ITEM (submenu_item), 1);
 
           MidiChSelectionInfo * info =
-            calloc (
-              1, sizeof (MidiChSelectionInfo));
+            object_new (MidiChSelectionInfo);
           info->track = track;
           info->ch = (midi_byte_t) i;
           g_signal_connect (
@@ -1952,8 +1945,7 @@ show_context_menu (
                     submenu_item), 1);
 
               MidiChSelectionInfo * info =
-                calloc (
-                  1, sizeof (MidiChSelectionInfo));
+                object_new (MidiChSelectionInfo);
               info->lane = lane;
               info->ch = (midi_byte_t) i;
               g_signal_connect (
@@ -2151,6 +2143,14 @@ multipress_released (
               track_set_muted (
                 track,
                 !track_get_muted (track),
+                F_TRIGGER_UNDO, F_AUTO_SELECT,
+                F_PUBLISH_EVENTS);
+            }
+          else if (CB_ICON_IS (LISTEN))
+            {
+              track_set_listened (
+                track,
+                !track_get_listened (track),
                 F_TRIGGER_UNDO, F_AUTO_SELECT,
                 F_PUBLISH_EVENTS);
             }
@@ -2802,6 +2802,8 @@ track_widget_new (Track * track)
       add_button (
         self, true, ICON_NAME_MUTE);
       add_button (
+        self, true, ICON_NAME_LISTEN);
+      add_button (
         self, true, ICON_NAME_SHOW_UI);
       add_button (
         self, false, ICON_NAME_LOCK);
@@ -2857,6 +2859,8 @@ track_widget_new (Track * track)
       add_button (
         self, 1, ICON_NAME_MUTE);
       add_button (
+        self, true, ICON_NAME_LISTEN);
+      add_button (
         self, 0, ICON_NAME_SHOW_AUTOMATION_LANES);
       break;
     case TRACK_TYPE_MIDI_BUS:
@@ -2873,6 +2877,8 @@ track_widget_new (Track * track)
       add_button (
         self, 1, ICON_NAME_MUTE);
       add_button (
+        self, true, ICON_NAME_LISTEN);
+      add_button (
         self, 0, ICON_NAME_SHOW_AUTOMATION_LANES);
       break;
     case TRACK_TYPE_MIDI_GROUP:
@@ -2887,6 +2893,8 @@ track_widget_new (Track * track)
       add_solo_button (self, 1);
       add_button (
         self, 1, ICON_NAME_MUTE);
+      add_button (
+        self, true, ICON_NAME_LISTEN);
       add_button (
         self, 0, ICON_NAME_LOCK);
       add_button (

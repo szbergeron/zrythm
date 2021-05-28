@@ -930,7 +930,7 @@ tracklist_track_name_is_unique (
 /**
  * Returns if the tracklist has soloed tracks.
  */
-int
+bool
 tracklist_has_soloed (
   const Tracklist * self)
 {
@@ -940,9 +940,85 @@ tracklist_has_soloed (
       track = self->tracks[i];
 
       if (track->channel && track_get_soloed (track))
-        return 1;
+        return true;
     }
-  return 0;
+  return false;
+}
+
+/**
+ * Returns if the tracklist has listened tracks.
+ */
+NONNULL
+bool
+tracklist_has_listened (
+  const Tracklist * self)
+{
+  Track * track;
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      track = self->tracks[i];
+
+      if (track->channel && track_get_listened (track))
+        return true;
+    }
+  return false;
+}
+
+int
+tracklist_get_num_muted_tracks (
+  const Tracklist * self)
+{
+  int count = 0;
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      Track * track = self->tracks[i];
+
+      if (track_type_has_channel (track->type) &&
+          track_get_muted (track))
+        {
+          count++;
+        }
+    }
+
+  return count;
+}
+
+int
+tracklist_get_num_soloed_tracks (
+  const Tracklist * self)
+{
+  int count = 0;
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      Track * track = self->tracks[i];
+
+      if (track_type_has_channel (track->type) &&
+          track_get_soloed (track))
+        {
+          count++;
+        }
+    }
+
+  return count;
+}
+
+int
+tracklist_get_num_listened_tracks (
+  const Tracklist * self)
+{
+  int count = 0;
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      Track * track = self->tracks[i];
+
+      if (track_type_has_channel (track->type) &&
+          track_get_listened (track))
+        {
+          count++;
+        }
+    }
+
+  return count;
 }
 
 /**
@@ -1175,7 +1251,7 @@ tracklist_handle_file_drop (
               region =
                 audio_region_new (
                   -1, file->abs_path, NULL, -1, NULL,
-                  0, pos, track->pos, lane_pos,
+                  0, 0, pos, track->pos, lane_pos,
                   idx_in_lane);
               break;
             case TRACK_TYPE_MIDI:
@@ -1216,7 +1292,7 @@ tracklist_handle_file_drop (
             tracklist_selections_action_new_create (
               track_type, NULL, file,
               TRACKLIST->num_tracks,
-              pos, 1);
+              pos, 1, -1);
           undo_manager_perform (UNDO_MANAGER, ua);
         }
     }
@@ -1245,6 +1321,18 @@ tracklist_mark_all_tracks_for_bounce (
       track_mark_for_bounce (
         track, bounce, F_MARK_REGIONS,
         F_NO_MARK_CHILDREN, F_NO_MARK_PARENTS);
+    }
+}
+
+void
+tracklist_get_total_bars (
+  Tracklist * self,
+  int *       total_bars)
+{
+  for (int i = 0; i < self->num_tracks; i++)
+    {
+      Track * track = self->tracks[i];
+      track_get_total_bars (track, total_bars);
     }
 }
 

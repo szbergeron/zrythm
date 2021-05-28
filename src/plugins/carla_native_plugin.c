@@ -43,6 +43,7 @@
 #include "utils/file.h"
 #include "utils/flags.h"
 #include "utils/io.h"
+#include "utils/math.h"
 #include "utils/objects.h"
 #include "utils/string.h"
 #include "zrythm.h"
@@ -171,6 +172,8 @@ host_write_midi_event (
 
   Port * midi_out_port =
     carla_native_plugin_get_midi_out_port (self);
+  g_return_val_if_fail (
+    IS_PORT_AND_NONNULL (midi_out_port), 0);
 
   midi_byte_t buf[event->size];
   for (int i = 0; i < event->size; i++)
@@ -320,6 +323,19 @@ engine_callback (
       EVENTS_PUSH (
         ET_PLUGIN_VISIBILITY_CHANGED,
         self->plugin);
+      break;
+    case ENGINE_CALLBACK_PARAMETER_VALUE_CHANGED:
+      /* if plugin was deactivated and we didn't
+       * explicitly tell it to deactivate */
+      if (val1 == PARAMETER_ACTIVE &&
+          val2 == 0 && val3 == 0 &&
+          self->plugin->activated &&
+          !self->plugin->deactivating)
+        {
+          /* send crash signal */
+          EVENTS_PUSH (
+            ET_PLUGIN_CRASHED, self->plugin);
+        }
       break;
     default:
       break;
@@ -741,7 +757,8 @@ carla_native_plugin_process (
           if (port->id.type == TYPE_AUDIO)
             {
               inbuf[audio_ports++] =
-                self->plugin->in_ports[i]->buf;
+                &self->plugin->in_ports[i]->buf[
+                  local_offset];
             }
           if (audio_ports == 2)
             break;
@@ -768,7 +785,8 @@ carla_native_plugin_process (
           if (port->id.type == TYPE_AUDIO)
             {
               outbuf[audio_ports++] =
-                self->plugin->out_ports[i]->buf;
+                &self->plugin->out_ports[i]->buf[
+                  local_offset];
             }
           if (audio_ports == 2)
             break;
@@ -1402,6 +1420,10 @@ carla_native_plugin_open_ui (
     IS_PLUGIN_AND_NONNULL (pl) &&
     pl->setting->descr);
 
+  g_message (
+    "%s: show/hide '%s' UI: %d",
+    __func__, pl->setting->descr->name, show);
+
   switch (pl->setting->descr->protocol)
     {
     case PROT_VST:
@@ -1480,6 +1502,8 @@ carla_native_plugin_activate (
   CarlaNativePlugin * self,
   bool                activate)
 {
+  g_message ("setting plugin %s active %d",
+    self->plugin->setting->descr->name, activate);
   carla_set_active (
     self->host_handle, 0, activate);
 
@@ -1513,8 +1537,15 @@ carla_native_plugin_set_param_value (
       return;
     }
 
-  g_debug ("setting param %d value to %f",
-    id, (double) val);
+  float cur_val =
+    carla_get_current_parameter_value (
+      self->host_handle, 0, id);
+  if (!math_floats_equal (cur_val, val))
+    {
+      g_debug (
+        "setting param %d value to %f",
+        id, (double) val);
+    }
   carla_set_parameter_value (
     self->host_handle, 0, id, val);
 }

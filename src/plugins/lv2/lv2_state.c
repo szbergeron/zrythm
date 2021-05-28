@@ -1,4 +1,24 @@
 /*
+ * Copyright (C) 2021 Alexandros Theodotou <alex at zrythm dot org>
+ *
+ * This file is part of Zrythm
+ *
+ * Zrythm is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Zrythm is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Zrythm.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This file incorporates work covered by the following copyright and
+ * permission notice:
+ *
   Copyright 2007-2016 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
@@ -33,6 +53,7 @@
 #include "utils/datetime.h"
 #include "utils/flags.h"
 #include "utils/objects.h"
+#include "utils/string.h"
 #include "zrythm_app.h"
 
 #include <gtk/gtk.h>
@@ -41,6 +62,90 @@
 #define NS_XSD  "http://www.w3.org/2001/XMLSchema#"
 
 #define STATE_FILENAME "state.ttl"
+
+/* not used - lilv handles these */
+#if 0
+/**
+ * LV2 state mapPath feature - abstract path
+ * callback.
+ */
+char *
+lv2_state_get_abstract_path (
+  LV2_State_Map_Path_Handle handle,
+  const char *              absolute_path)
+{
+  Lv2Plugin * lv2 = (Lv2Plugin *) handle;
+  char * absolute_state_path =
+    plugin_get_abs_state_dir (
+      lv2->plugin, F_NOT_BACKUP);
+
+  GFile * parent =
+    g_file_new_for_path (absolute_state_path);
+  GFile * descendant =
+    g_file_new_for_path (absolute_path);
+
+  char * abstract_path =
+    g_file_get_relative_path (parent, descendant);
+
+  g_object_unref (parent);
+  g_object_unref (descendant);
+  g_free (absolute_state_path);
+
+  g_message (
+    "%s: '%s' -> '%s'",
+    __func__, absolute_path, abstract_path);
+
+  g_return_val_if_fail (abstract_path, NULL);
+
+  return abstract_path;
+}
+
+/**
+ * LV2 state mapPath feature - absolute path
+ * callback.
+ */
+char *
+lv2_state_get_absolute_path (
+  LV2_State_Map_Path_Handle handle,
+  const char *              abstract_path)
+{
+  Lv2Plugin * lv2 = (Lv2Plugin *) handle;
+  char * absolute_state_path =
+    plugin_get_abs_state_dir (
+      lv2->plugin, F_NOT_BACKUP);
+
+  GFile * parent =
+    g_file_new_for_path (absolute_state_path);
+
+  GFile * absolute_path_file =
+    g_file_resolve_relative_path (
+      parent, abstract_path);
+  char * absolute_path =
+    g_file_get_path (absolute_path_file);
+
+  g_object_unref (parent);
+  g_object_unref (absolute_path_file);
+  g_free (absolute_state_path);
+
+  g_message (
+    "%s: '%s' -> '%s'",
+    __func__, abstract_path, absolute_path);
+
+  g_return_val_if_fail (absolute_path, NULL);
+
+  return absolute_path;
+}
+
+/**
+ * LV2 State freePath implementation.
+ */
+void
+lv2_state_free_path (
+  LV2_State_Free_Path_Handle handle,
+  char *                     path)
+{
+  g_free (path);
+}
 
 /**
  * LV2 State makePath feature for save only.
@@ -70,6 +175,7 @@ lv2_state_make_path_save (
 
   return ret;
 }
+#endif
 
 /**
  * LV2 State makePath feature for temporary files.
@@ -135,7 +241,7 @@ lv2_state_save_to_file (
       pl->temp_dir, copy_dir, link_dir,
       abs_state_dir,
       lv2_plugin_get_port_value, pl,
-      LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+      LV2_STATE_IS_PORTABLE,
       pl->state_features);
   g_return_val_if_fail (state, NULL);
 
@@ -192,36 +298,42 @@ set_port_value (
 {
   Lv2Plugin * plugin = (Lv2Plugin*)user_data;
   Plugin * pl = plugin->plugin;
+  char pl_str[800];
+  plugin_print (plugin->plugin, pl_str, 800);
+
   Port* port =
     plugin_get_port_by_symbol (pl, port_symbol);
   if (!port)
     {
       g_warning (
-        "Preset port %s is missing", port_symbol);
+        "[%s] Preset port %s is missing",
+        pl_str, port_symbol);
       return;
   }
 
+  LV2_Atom_Forge forge = plugin->main_forge;
+
   float fvalue;
-  if (type == plugin->forge.Float)
+  if (type == forge.Float)
     fvalue = *(const float*)value;
-  else if (type == plugin->forge.Double)
+  else if (type == forge.Double)
     fvalue = (float) *(const double*)value;
-  else if (type == plugin->forge.Int)
+  else if (type == forge.Int)
     fvalue = (float) *(const int32_t*)value;
-  else if (type == plugin->forge.Long)
+  else if (type == forge.Long)
     fvalue = (float) *(const int64_t*)value;
   else
     {
       g_warning (
-        "Preset `%s' value has bad type <%s>",
-        port_symbol,
+        "[%s] Preset `%s' value has bad type <%s>",
+        pl_str, port_symbol,
         plugin->unmap.unmap (
           plugin->unmap.handle, type));
       return;
     }
   g_debug (
-    "(lv2 state): setting %s=%f...",
-    port_symbol, (double) fvalue);
+    "[%s] (lv2 state): setting %s=%f...",
+    pl_str, port_symbol, (double) fvalue);
 
   if (TRANSPORT->play_state != PLAYSTATE_ROLLING)
     {
@@ -238,7 +350,7 @@ set_port_value (
 
   if (pl->visible)
     {
-      // Update UI
+      /* update UI */
       char buf[sizeof (Lv2ControlChange) +
         sizeof (fvalue)];
       Lv2ControlChange* ev = (Lv2ControlChange*)buf;
@@ -257,33 +369,43 @@ lv2_state_apply_state (
   Lv2Plugin* plugin,
   LilvState* state)
 {
-  bool must_pause =
-    !plugin->safe_restore &&
-    TRANSPORT->play_state == PLAYSTATE_ROLLING;
-  if (state)
+  g_message ("%s() start", __func__);
+
+  char pl_str[800];
+  plugin_print (plugin->plugin, pl_str, 800);
+
+  /* if plugin does not support thread safe
+   * restore, stop the engine */
+  EngineState engine_state;
+  bool engine_paused = false;
+  if (!plugin->safe_restore &&
+      AUDIO_ENGINE->run)
     {
-      if (must_pause)
-        {
-          g_message ("must pause");
-          TRANSPORT->play_state =
-            PLAYSTATE_PAUSE_REQUESTED;
-          g_usleep (10000);
-          /*zix_sem_wait(&TRANSPORT->paused);*/
-        }
-
-      g_message ("applying state...");
-      lilv_state_restore (
-        state, plugin->instance,
-        set_port_value, plugin, 0,
-        plugin->state_features);
-      g_message ("state applied");
-
-      if (must_pause)
-        {
-          plugin->request_update = true;
-          TRANSPORT->play_state = PLAYSTATE_ROLLING;
-        }
+      g_message (
+        "plugin '%s' does not support safe "
+        "restore, pausing engine", pl_str);
+      engine_wait_for_pause (
+        AUDIO_ENGINE, &engine_state, F_NO_FORCE);
+      g_return_if_fail (!AUDIO_ENGINE->run);
+      engine_paused = true;
     }
+
+  g_message ("applying state...");
+  lilv_state_restore (
+    state, plugin->instance,
+    set_port_value, plugin, 0,
+    plugin->state_features);
+  g_message ("state applied");
+
+  if (engine_paused)
+    {
+      plugin->request_update = true;
+      g_message ("resuming engine");
+      engine_resume (AUDIO_ENGINE, &engine_state);
+      g_return_if_fail (AUDIO_ENGINE->run);
+    }
+
+  g_message ("%s() end", __func__);
 }
 
 int
@@ -295,6 +417,7 @@ lv2_state_apply_preset (
   plugin->preset =
     lilv_state_new_from_world (
       LILV_WORLD, &plugin->map, preset);
+  g_return_val_if_fail (plugin->preset, -1);
   lv2_state_apply_state (plugin, plugin->preset);
   return 0;
 }
@@ -316,7 +439,7 @@ lv2_state_save_preset (
       &plugin->map,
       plugin->temp_dir, dir, dir, dir,
       lv2_plugin_get_port_value, plugin,
-      LV2_STATE_IS_POD | LV2_STATE_IS_PORTABLE,
+      LV2_STATE_IS_PORTABLE,
       NULL);
 
   if (label)
@@ -363,26 +486,32 @@ lv2_state_load_presets (
     lilv_plugin_get_related (
       plugin->lilv_plugin,
       PM_GET_NODE (LV2_PRESETS__Preset));
-  LILV_FOREACH(nodes, i, presets) {
-    const LilvNode* preset = lilv_nodes_get(presets, i);
-    lilv_world_load_resource(LILV_WORLD, preset);
-    if (!sink) {
-      continue;
-    }
+  LILV_FOREACH(nodes, i, presets)
+    {
+      const LilvNode* preset =
+        lilv_nodes_get(presets, i);
+      lilv_world_load_resource (LILV_WORLD, preset);
+      if (!sink) {
+        continue;
+      }
 
-    LilvNodes* labels =
-      lilv_world_find_nodes (
-        LILV_WORLD, preset,
-        PM_GET_NODE (LILV_NS_RDFS "label"), NULL);
-    if (labels) {
-      const LilvNode* label = lilv_nodes_get_first(labels);
-      sink(plugin, preset, label, data);
-      lilv_nodes_free(labels);
-    } else {
-      fprintf(stderr, "Preset <%s> has no rdfs:label\n",
-              lilv_node_as_string(lilv_nodes_get(presets, i)));
+      LilvNodes* labels =
+        lilv_world_find_nodes (
+          LILV_WORLD, preset,
+          PM_GET_NODE (LILV_NS_RDFS "label"), NULL);
+      if (labels)
+        {
+          const LilvNode* label = lilv_nodes_get_first(labels);
+          sink(plugin, preset, label, data);
+          lilv_nodes_free(labels);
+        }
+      else
+        {
+          g_message (
+            "Preset <%s> has no rdfs:label\n",
+            lilv_node_as_string(preset));
+        }
     }
-  }
   lilv_nodes_free(presets);
 
   return 0;

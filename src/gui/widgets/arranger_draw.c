@@ -173,7 +173,11 @@ draw_playhead (
   cairo_t *        cr,
   GdkRectangle *   rect)
 {
-  int px = arranger_widget_get_playhead_px (self);
+  int cur_playhead_px =
+    arranger_widget_get_playhead_px (self);
+  int px = cur_playhead_px;
+  /*int px = self->queued_playhead_px;*/
+  /*g_message ("drawing %d", px);*/
 
   if (px >= rect->x && px <= rect->x + rect->width)
     {
@@ -195,6 +199,14 @@ draw_playhead (
         }
       cairo_fill (cr);
       self->last_playhead_px = px;
+
+#if 0
+      if (cur_playhead_px !=
+            self->queued_playhead_px)
+        {
+          arranger_widget_redraw_playhead (self);
+        }
+#endif
     }
 }
 
@@ -876,6 +888,15 @@ arranger_draw_cb (
       !gdk_rectangle_equal (
          &rect, &self->last_rect))
     {
+      /* skip drawing if rectangle too large */
+      if (rect.width > 10000 ||
+          rect.height > 10000)
+        {
+          g_warning (
+            "skipping draw - rectangle too large");
+          return false;
+        }
+
       /*g_message (*/
         /*"redrawing arranger in rect: "*/
         /*"(%d, %d) width: %d height %d)",*/

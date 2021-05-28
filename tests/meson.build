@@ -17,8 +17,11 @@
 
 if get_option ('tests')
 
+  test_lv2_plugins = []
+  test_lv2_plugin_libs = []
   subdir('eg-amp.lv2')
   subdir('eg-fifths.lv2')
+  subdir('sigabrt.lv2')
   subdir('test-instrument.lv2')
 
   test_env = environment ()
@@ -105,6 +108,27 @@ if get_option ('tests')
       test_config_guile.set_quoted (
         name.to_upper() + '_BUNDLE', '')
     endif
+  endforeach
+
+  # also add bundle/uri macros for test plugins
+  foreach pl : test_lv2_plugins
+    name = pl['name']
+    uri = pl['uri']
+    bundle = pl['bundle']
+    lib = pl['lib']
+    name_underscorified = name.underscorify ().to_upper ()
+    # C
+    test_config.set_quoted (
+      name_underscorified + '_URI', uri)
+    test_config.set_quoted (
+      name_underscorified + '_BUNDLE_URI',
+      'file://' + bundle + '/')
+    # Guile
+    test_config_guile.set_quoted (
+      name_underscorified + '_URI', uri)
+    test_config_guile.set_quoted (
+      name_underscorified + '_BUNDLE_URI',
+      'file://' + bundle + '/')
   endforeach
 
   # use custom lv2apply until upstream merges URID
@@ -227,6 +251,7 @@ if get_option ('tests')
     'audio/region': { parallel: true },
     'audio/snap_grid': { parallel: true },
     'audio/track': { parallel: true },
+    'audio/track_processor': { parallel: true },
     'audio/tracklist': { parallel: true },
     'gui/backend/arranger_selections': {
       parallel: true },
@@ -234,6 +259,7 @@ if get_option ('tests')
     'plugins/carla_discovery': { parallel: true },
     'plugins/carla_native_plugin': { parallel: false },
     'plugins/lv2_plugin': { parallel: false },
+    'plugins/lv2/lv2_state': { parallel: false },
     'plugins/plugin': { parallel: false },
     'plugins/plugin_manager': { parallel: true },
     'project': { parallel: true },
@@ -353,7 +379,10 @@ if get_option ('tests')
         env: test_env, suite: suite,
         is_parallel: is_parallel,
         args: 'args' in info ? info['args'] : [],
-        depends: test_lv2apply_wavs,
+        depends: [
+          test_lv2apply_wavs,
+          test_lv2_plugin_libs,
+          ],
         timeout: timeout)
     else
       # create C executable for Guile runner

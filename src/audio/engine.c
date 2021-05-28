@@ -563,10 +563,8 @@ engine_setup (
 
   hardware_processor_setup (
     self->hw_in_processor);
-#if 0
   hardware_processor_setup (
     self->hw_out_processor);
-#endif
 
   if ((self->audio_backend == AUDIO_BACKEND_JACK &&
        self->midi_backend != MIDI_BACKEND_JACK) ||
@@ -848,6 +846,8 @@ engine_init_loaded (
     self->sample_processor);
   hardware_processor_init_loaded (
     self->hw_in_processor);
+  hardware_processor_init_loaded (
+    self->hw_out_processor);
 
   init_common (self);
 
@@ -894,10 +894,8 @@ engine_new (
 
   /* init MIDI queues */
   self->midi_editor_manual_press->midi_events =
-    midi_events_new (
-      self->midi_editor_manual_press);
-  self->midi_in->midi_events =
-    midi_events_new (self->midi_in);
+    midi_events_new ();
+  self->midi_in->midi_events = midi_events_new ();
 
   /* create monitor out ports */
   Port * monitor_out_l, * monitor_out_r;
@@ -919,10 +917,8 @@ engine_new (
 
   self->hw_in_processor =
     hardware_processor_new (true);
-#if 0
   self->hw_out_processor =
     hardware_processor_new (false);
-#endif
 
   init_common (self);
 
@@ -982,7 +978,7 @@ engine_wait_for_pause (
       router_start_cycle (
         ROUTER, 1, 0, PLAYHEAD);
       engine_post_process (
-        self, 1);
+        self, 0, 1);
     }
 }
 
@@ -1456,6 +1452,9 @@ engine_process (
 
   nframes_t total_frames_remaining =
     total_frames_to_process;
+
+  /* --- handle preroll --- */
+
   while (self->remaining_latency_preroll > 0)
     {
       nframes_t num_preroll_frames =
@@ -1470,6 +1469,8 @@ engine_process (
                 num_preroll_frames);
             }
         }
+
+      /* loop through each route */
       for (size_t i = 0;
            i < self->router->graph->n_init_triggers;
            i++)
@@ -1477,26 +1478,18 @@ engine_process (
           GraphNode * start_node =
             self->router->graph->
               init_trigger_list[i];
-          nframes_t route_latency =
-            start_node->route_playback_latency;
-#if 0
-          g_message ("route latency for %s is %u",
-            graph_node_get_name (start_node),
-            route_latency);
-#endif
+
+#define route_latency \
+  (start_node->route_playback_latency)
 
           if (self->remaining_latency_preroll >
                 route_latency + num_preroll_frames)
             {
               /* this route will no-roll for the
                * complete pre-roll cycle */
-              /*g_message (*/
-                /*"no-roll for whole pre-roll cycle");*/
-              continue;
             }
-
-          if (self->remaining_latency_preroll >
-                route_latency)
+          else if (self->remaining_latency_preroll >
+                     route_latency)
             {
               /* route may need partial no-roll
                * and partial roll from
@@ -1510,38 +1503,29 @@ engine_process (
                   num_preroll_frames,
                   self->remaining_latency_preroll -
                     route_latency);
-#if 0
-              g_message (
-                "partial roll from %u",
-                num_preroll_frames);
-#endif
+
+              /* this route will do a partial roll
+               * from num_preroll_frames */
             }
           else
             {
-              /* route will do a normal roll for the
-               * complete pre-roll cycle */
-              /*g_message (*/
-                /*"normal roll for complete pre-roll "*/
-                /*"cycle");*/
+              /* this route will do a normal roll
+               * for the complete pre-roll cycle */
             }
-        } /* end foreach trigger node */
 
+#undef route_latency
+
+        } /* foreach route */
+
+      /* offset to start processing at in this
+       * cycle */
       nframes_t preroll_offset =
         total_frames_to_process -
           total_frames_remaining;
-
       g_warn_if_fail (
         preroll_offset + num_preroll_frames <=
           self->nframes);
 
-      /* this will keep looping until everything was
-       * processed in this cycle */
-      /*g_message (*/
-        /*"======== processing at %d for %d samples "*/
-        /*"(preroll: %ld)",*/
-        /*total_frames_to_process - total_frames_remaining,*/
-        /*num_preroll_frames,*/
-        /*self->remaining_latency_preroll);*/
       router_start_cycle (
         self->router, num_preroll_frames,
         preroll_offset, PLAYHEAD);
@@ -1552,41 +1536,40 @@ engine_process (
 
       if (total_frames_remaining == 0)
         break;
-    }
 
+    } /* while latency preroll frames remaining */
+
+  /* if we still have frames to process (i.e., if
+   * preroll finished completely and can start
+   * processing normally) */
   if (total_frames_remaining > 0)
     {
+      nframes_t cur_offset =
+        total_frames_to_process -
+          total_frames_remaining;
+
       /* queue metronome if met within this cycle */
       if (self->transport->metronome_enabled &&
           TRANSPORT_IS_ROLLING)
         {
           metronome_queue_events (
-            self,
-            total_frames_to_process -
-              total_frames_remaining,
+            self, cur_offset,
             total_frames_remaining);
         }
 
-#if 0
-      g_message (
-        "======== processing at %d for %d samples "
-        "(preroll: %u)",
-        total_frames_to_process -
-          total_frames_remaining,
-        total_frames_remaining,
-        self->remaining_latency_preroll);
-#endif
+      /* run the cycle for the remaining frames -
+       * this will also play the queued metronome
+       * events (if any) */
       router_start_cycle (
         self->router, total_frames_remaining,
-        total_frames_to_process -
-          total_frames_remaining,
-        PLAYHEAD);
+        cur_offset, PLAYHEAD);
     }
-  /*g_message ("end====================");*/
 
-  /* run post-process code */
+  /* run post-process code for the number of frames
+   * remaining after handling preroll (if any) */
   engine_post_process (
-    self, total_frames_remaining);
+    self, total_frames_remaining,
+    total_frames_to_process);
 
 #ifdef TRIAL_VER
   /* go silent if limit reached */
@@ -1620,16 +1603,21 @@ engine_process (
   /*
    * processing finished, return 0 (OK)
    */
-  /*g_message ("processing finished");*/
   return 0;
 }
 
 /**
  * To be called after processing for common logic.
+ *
+ * @param roll_nframes Frames to roll (add to the
+ *   playhead - if transport rolling).
+ * @param nframes Total frames for this processing
+ *   cycle.
  */
 void
 engine_post_process (
-  AudioEngine * self,
+  AudioEngine *   self,
+  const nframes_t roll_nframes,
   const nframes_t nframes)
 {
   if (!self->exporting)
@@ -1650,7 +1638,7 @@ engine_post_process (
       self->remaining_latency_preroll == 0)
     {
       transport_add_to_playhead (
-        self->transport, nframes);
+        self->transport, roll_nframes);
 #ifdef HAVE_JACK
       if (self->audio_backend == AUDIO_BACKEND_JACK)
         {
@@ -1694,7 +1682,7 @@ engine_fill_out_bufs (
 #endif
 #ifdef HAVE_JACK
     case AUDIO_BACKEND_JACK:
-      engine_jack_fill_out_bufs (self, nframes);
+      /*engine_jack_fill_out_bufs (self, nframes);*/
       break;
 #endif
 #ifdef HAVE_PORT_AUDIO

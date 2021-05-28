@@ -47,7 +47,7 @@ with meaningful stack traces and bug reports.
 - gtk+3 (LGPLv2.1+): <https://gitlab.gnome.org/GNOME/gtk>
 - gtksourceview (LGPLv2.1+): <https://wiki.gnome.org/Projects/GtkSourceView>
 - guile (GPLv3+): <https://www.gnu.org/software/guile/>
-- libaudec (AGPLv3+): <https://git.zrythm.org/cgit/libaudec/>
+- libaudec (AGPLv3+): <https://git.zrythm.org/zrythm/libaudec/>
 - libbacktrace (3-Clause BSD): <https://github.com/ianlancetaylor/libbacktrace>
 - libcyaml (ISC): <https://github.com/tlsa/libcyaml/>
 - lilv (ISC): <https://drobilla.net/software/lilv>
@@ -55,11 +55,13 @@ with meaningful stack traces and bug reports.
 - reproc (Expat): <https://github.com/DaanDeMeyer/reproc>
 - zstd (3-Clause BSD): <https://github.com/facebook/zstd>
 
-### Optional
+### Recommended
 - carla (GPLv2+): <https://kx.studio/Applications:Carla>
-- graphviz (EPLv1.0): <http://graphviz.org/>
 - jack (LGPLv2.1+): <https://jackaudio.org/>
 - lsp-dsp-lib (LGPLv3+): <https://github.com/sadko4u/lsp-dsp-lib>
+
+### Optional
+- graphviz (EPLv1.0): <http://graphviz.org/>
 - rtaudio (Expat): <http://www.music.mcgill.ca/~gary/rtaudio/>
 - rtmidi (Expat): <https://www.music.mcgill.ca/~gary/rtmidi/>
 - SDL2 (zlib): <https://www.libsdl.org/>

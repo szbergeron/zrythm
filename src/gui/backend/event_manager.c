@@ -68,6 +68,7 @@
 #include "gui/widgets/midi_modifier_arranger.h"
 #include "gui/widgets/modulator.h"
 #include "gui/widgets/modulator_view.h"
+#include "gui/widgets/monitor_section.h"
 #include "gui/widgets/midi_editor_space.h"
 #include "gui/widgets/mixer.h"
 #include "gui/widgets/piano_roll_keys.h"
@@ -171,6 +172,8 @@ on_project_selection_type_changed (void)
       break;
     case SELECTION_TYPE_INSERT:
     case SELECTION_TYPE_MIDI_FX:
+    case SELECTION_TYPE_INSTRUMENT:
+    case SELECTION_TYPE_MODULATOR:
       break;
     case SELECTION_TYPE_EDITOR:
       z_gtk_widget_add_style_class (
@@ -535,6 +538,18 @@ on_plugin_added (Plugin * plugin)
 }
 
 static void
+on_plugin_crashed (Plugin * plugin)
+{
+  char * str =
+    g_strdup_printf (
+      _("Plugin '%s' has crashed and has been "
+      "disabled."),
+      plugin->setting->descr->name);
+  ui_show_error_message (MAIN_WINDOW, str);
+  g_free (str);
+}
+
+static void
 on_plugin_state_changed (Plugin * pl)
 {
   Track * track = plugin_get_track (pl);
@@ -835,7 +850,11 @@ on_mixer_selections_changed ()
 static void
 on_track_color_changed (Track * track)
 {
-  channel_widget_refresh (track->channel->widget);
+  if (track_type_has_channel (track->type))
+    {
+      channel_widget_refresh (
+        track->channel->widget);
+    }
   track_widget_force_redraw (track->widget);
   left_dock_edge_widget_refresh (
     MW_LEFT_DOCK_EDGE);
@@ -1479,6 +1498,8 @@ process_events (void * data)
               on_track_state_changed (
                 TRACKLIST->tracks[j]);
             }
+          monitor_section_widget_refresh (
+            MW_MONITOR_SECTION);
           break;
         case ET_TRACK_VISIBILITY_CHANGED:
           tracklist_widget_update_track_visibility (
@@ -1517,6 +1538,10 @@ process_events (void * data)
           break;
         case ET_PLUGIN_ADDED:
           on_plugin_added (
+            (Plugin *) ev->arg);
+          break;
+        case ET_PLUGIN_CRASHED:
+          on_plugin_crashed (
             (Plugin *) ev->arg);
           break;
         case ET_PLUGINS_REMOVED:
@@ -1928,6 +1953,8 @@ process_events (void * data)
           break;
         case ET_LOG_WARNING_STATE_CHANGED:
           header_widget_refresh (MW_HEADER);
+          break;
+        case ET_PLAYHEAD_SCROLL_MODE_CHANGED:
           break;
         default:
           g_warning (

@@ -171,7 +171,8 @@ handle_stop_recording (
         {
           AudioClip * clip =
             audio_region_get_clip (r);
-          audio_clip_write_to_pool (clip, true);
+          audio_clip_write_to_pool (
+            clip, true, F_NOT_BACKUP);
         }
     }
 
@@ -517,13 +518,18 @@ recording_manager_handle_recording (
       re->nframes = nframes;
       dsp_copy (
         &re->lbuf[local_offset],
-        &track_processor->stereo_out->l->buf[
+        &track_processor->stereo_in->l->buf[
           local_offset],
         nframes);
+      Port * r =
+        track_processor->mono &&
+        control_port_is_toggled (
+          track_processor->mono) ?
+          track_processor->stereo_in->l :
+          track_processor->stereo_in->r;
       dsp_copy (
         &re->rbuf[local_offset],
-        &track_processor->stereo_out->r->buf[
-          local_offset],
+        &r->buf[local_offset],
         nframes);
       strcpy (re->track_name, tr->name);
       /*UP_RECEIVED (re);*/
@@ -815,6 +821,7 @@ handle_resume_event (
               new_region =
                 audio_region_new (
                   -1, NULL, NULL, 1, name, 2,
+                  BIT_DEPTH_32,
                   &resume_pos,
                   tr->pos, new_lane_pos,
                   idx_inside_lane);
@@ -825,8 +832,7 @@ handle_resume_event (
             F_GEN_NAME, F_PUBLISH_EVENTS);
 
           /* remember region */
-          add_recorded_id (
-            self, new_region);
+          add_recorded_id (self, new_region);
           tr->recording_region = new_region;
         }
       /* if MIDI and overwriting or merging
@@ -1033,7 +1039,8 @@ handle_audio_event (
   if ((cur_time - clip->last_write) >
         nano_sec_to_wait)
     {
-      audio_clip_write_to_pool (clip, true);
+      audio_clip_write_to_pool (
+        clip, true, F_NOT_BACKUP);
     }
 
 #if 0
@@ -1441,7 +1448,8 @@ handle_start_recording (
           ZRegion * region =
             audio_region_new (
               -1, NULL, NULL, ev->nframes, name, 2,
-              &start_pos, tr->pos, new_lane_pos,
+              BIT_DEPTH_32, &start_pos, tr->pos,
+              new_lane_pos,
               tr->lanes[new_lane_pos]->num_regions);
           g_return_if_fail (region);
           track_add_region (

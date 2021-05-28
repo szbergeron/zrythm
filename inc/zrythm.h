@@ -104,6 +104,12 @@ typedef enum ZrythmDirType
   /** Localization under "share". */
   ZRYTHM_DIR_SYSTEM_LOCALEDIR,
 
+  /**
+   * "gtksourceview-4/language-specs" under
+   * "share".
+   */
+  ZRYTHM_DIR_SYSTEM_SOURCEVIEW_LANGUAGE_SPECS_DIR,
+
   /** share/zrythm */
   ZRYTHM_DIR_SYSTEM_ZRYTHM_DATADIR,
 
@@ -115,6 +121,9 @@ typedef enum ZrythmDirType
 
   /** Themes. */
   ZRYTHM_DIR_SYSTEM_THEMESDIR,
+
+  /** CSS themes. */
+  ZRYTHM_DIR_SYSTEM_THEMES_CSS_DIR,
 
   /* ************************************ */
 
@@ -132,6 +141,9 @@ typedef enum ZrythmDirType
   ZRYTHM_DIR_USER_PROJECTS,
   ZRYTHM_DIR_USER_TEMPLATES,
   ZRYTHM_DIR_USER_THEMES,
+
+  /** User CSS themes. */
+  ZRYTHM_DIR_USER_THEMES_CSS,
 
   /** User scripts. */
   ZRYTHM_DIR_USER_SCRIPTS,
@@ -225,6 +237,11 @@ typedef struct Zrythm
    * String interner for internal things.
    */
   Symap *             symap;
+
+  /**
+   * String interner for error domains.
+   */
+  Symap *             error_domain_symap;
 
   /** Object utils. */
   ObjectUtils *       object_utils;
