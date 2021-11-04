@@ -36,6 +36,7 @@ fs = import ('fs')
 cmake = import ('cmake')
 cmake_opts = cmake.subproject_options ()
 cmake_opts.add_cmake_defines ({'CMAKE_POSITION_INDEPENDENT_CODE': 'ON'})
+cmake_opts.add_cmake_defines ({'CMAKE_EXPORT_COMPILE_COMMANDS': 'ON'})
 
 # --- Check for programs ---
 
