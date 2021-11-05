@@ -32,7 +32,7 @@
 #ifndef __GUI_WIDGETS_ITEM_FACTORY_H__
 #define __GUI_WIDGETS_ITEM_FACTORY_H__
 
-#include <gtk.h>
+#include <gtk/gtk.h>
 
 typedef enum ItemFactoryType
 {
