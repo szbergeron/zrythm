@@ -535,7 +535,7 @@ endif
   #'gobject-2.0',
   #fallback: ['glib', 'libgobject_dep'])
 glib_dep = dependency (
-  'glib-2.0', version: '>=3.64', required: false,
+  'glib-2.0', version: '>=2.66', required: false,
   static: all_static)
 if os_freebsd
   # force system glib on freebsd
