@@ -56,13 +56,13 @@ tasks:
   - setup: |
       #sudo pkg install -y py37-pip
       cd zrythm
-      CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ../meson/meson.py build -Dtests=true -Dmanpage=true
+      CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ../meson/meson.py build -Dtests=true -Dmanpage=true -Db_lto=false
   - build: |
       cd zrythm
       ninja -C build
   - test: |
       cd zrythm
-      ../meson/meson.py test -C build --no-suite=skip-ci
+      ../meson/meson.py test -C build --no-suite=skip-ci --no-suite=pango --no-suite=gtksourceview5
   - install: |
       cd zrythm
       DESTDIR=/tmp ninja -C build install
