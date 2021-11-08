@@ -496,14 +496,16 @@ folder_channel_widget_refresh (
 
 static void
 show_context_menu (
-  FolderChannelWidget * self)
+  FolderChannelWidget * self,
+  double                x,
+  double                y)
 {
   GMenu * menu =
     channel_widget_generate_context_menu_for_track (
       self->track);
 
   z_gtk_show_context_menu_from_g_menu (
-    GTK_WIDGET (self), menu);
+    self->popover_menu, x, y, menu);
 }
 
 static void
@@ -535,7 +537,7 @@ on_right_click (
     }
   if (n_press == 1)
     {
-      show_context_menu (self);
+      show_context_menu (self, x, y);
     }
 }
 
@@ -684,6 +686,13 @@ folder_channel_widget_init (
   g_type_ensure (COLOR_AREA_WIDGET_TYPE);
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  self->popover_menu =
+    GTK_POPOVER_MENU (
+      gtk_popover_menu_new_from_model (NULL));
+  gtk_box_append (
+    GTK_BOX (self),
+    GTK_WIDGET (self->popover_menu));
 
   gtk_widget_set_hexpand (
     GTK_WIDGET (self), 0);

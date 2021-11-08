@@ -787,14 +787,16 @@ channel_widget_generate_context_menu_for_track (
 
 static void
 show_context_menu (
-  ChannelWidget * self)
+  ChannelWidget * self,
+  double          x,
+  double          y)
 {
   GMenu * menu =
     channel_widget_generate_context_menu_for_track (
       self->channel->track);
 
   z_gtk_show_context_menu_from_g_menu (
-    GTK_WIDGET (self), menu);
+    self->popover_menu, x, y, menu);
 }
 
 static void
@@ -826,7 +828,7 @@ on_right_click (
     }
   if (n_press == 1)
     {
-      show_context_menu (self);
+      show_context_menu (self, x, y);
     }
 }
 
@@ -1097,6 +1099,10 @@ channel_widget_init (ChannelWidget * self)
     CHANNEL_SENDS_EXPANDER_WIDGET_TYPE);
 
   gtk_widget_init_template (GTK_WIDGET (self));
+
+  self->popover_menu =
+    GTK_POPOVER_MENU (
+      gtk_popover_menu_new_from_model (NULL));
 
   self->last_midi_trigger_time = 0;
 

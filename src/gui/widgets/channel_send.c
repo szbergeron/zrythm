@@ -242,7 +242,9 @@ on_pressed (
 
 static void
 show_context_menu (
-  ChannelSendWidget * self)
+  ChannelSendWidget * self,
+  double              x,
+  double              y)
 {
   GMenu * menu = g_menu_new ();
   GMenuItem * menuitem;
@@ -256,7 +258,7 @@ show_context_menu (
   g_menu_append_item (menu, menuitem);
 
   z_gtk_show_context_menu_from_g_menu (
-    GTK_WIDGET (self), menu);
+    self->popover_menu, x, y, menu);
 }
 
 static void
@@ -270,7 +272,7 @@ on_right_click (
   if (n_press != 1)
     return;
 
-  show_context_menu (self);
+  show_context_menu (self, x, y);
 }
 
 static void
@@ -383,6 +385,10 @@ channel_send_widget_init (
     GTK_WIDGET (self), -1, 20);
 
   self->cache_tooltip = NULL;
+
+  self->popover_menu =
+    GTK_POPOVER_MENU (
+      gtk_popover_menu_new_from_model (NULL));
 
   self->click =
     GTK_GESTURE_CLICK (

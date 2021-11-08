@@ -295,7 +295,18 @@ z_gtk_widget_remove_children_of_type (
         g_ptr_array_index (arr, i);
       if (G_TYPE_CHECK_INSTANCE_TYPE (child, type))
         {
-          gtk_widget_unparent (child);
+          if (GTK_IS_BOX (widget))
+            {
+              g_debug (
+                "removing %s (%p) from box %s (%p)",
+                gtk_widget_get_name (child),
+                child,
+                gtk_widget_get_name (widget),
+                widget);
+              gtk_box_remove (
+                GTK_BOX (widget), child);
+            }
+          /*gtk_widget_unparent (child);*/
         }
     }
   g_ptr_array_unref (arr);
@@ -1074,6 +1085,11 @@ on_new_window_destroyed (
 
   GtkNotebook * new_notebook =
     g_ptr_array_index (data->new_notebooks, idx);
+  const char * name =
+    gtk_widget_get_name (GTK_WIDGET (new_notebook));
+  g_debug ("widget %s (%p)", name, new_notebook);
+  g_return_if_fail (
+    GTK_IS_NOTEBOOK (new_notebook));
   g_ptr_array_remove_index (data->new_windows, idx);
   g_ptr_array_remove_index (
     data->new_notebooks, idx);
@@ -1104,6 +1120,7 @@ on_new_window_destroyed (
       gtk_notebook_set_tab_reorderable (
         data->notebook, page, true);
     }
+  g_object_unref (new_notebook);
 }
 
 typedef struct DetachableNotebookDeleteEventData
@@ -1113,9 +1130,8 @@ typedef struct DetachableNotebookDeleteEventData
 } DetachableNotebookDeleteEventData;
 
 static bool
-on_new_window_delete_event (
+on_new_window_close_request (
   GtkWidget *                         widget,
-  GdkEvent *                          event,
   DetachableNotebookDeleteEventData * delete_data)
 {
   GtkWidget * page = delete_data->page;
@@ -1153,14 +1169,15 @@ static GtkNotebook *
 on_create_window (
   GtkNotebook *            notebook,
   GtkWidget *              page,
-  int                      x,
-  int                      y,
   DetachableNotebookData * data)
 {
+  g_return_val_if_fail (data, NULL);
+
   GtkWindow * new_window =
     GTK_WINDOW (gtk_window_new ());
   GtkNotebook * new_notebook =
     GTK_NOTEBOOK (gtk_notebook_new ());
+  g_object_ref_sink (new_notebook);
   gtk_window_set_child (
     GTK_WINDOW (new_window),
     GTK_WIDGET (new_notebook));
@@ -1247,8 +1264,8 @@ on_create_window (
   delete_data->data = data;
   delete_data->page = page;
   g_signal_connect_data (
-    G_OBJECT (new_window), "delete-event",
-    G_CALLBACK (on_new_window_delete_event),
+    G_OBJECT (new_window), "close-request",
+    G_CALLBACK (on_new_window_close_request),
     delete_data,
     (GClosureNotify) free_delete_data, 0);
   gtk_window_set_icon_name (
@@ -1329,6 +1346,7 @@ detach_pages_programmatically (
   GtkNotebook *            old_notebook,
   DetachableNotebookData * data)
 {
+  g_return_if_fail (GTK_IS_NOTEBOOK (old_notebook));
   int n_pages =
     gtk_notebook_get_n_pages (old_notebook);
   for (int i = n_pages - 1; i >= 0; i--)
@@ -1355,7 +1373,7 @@ detach_pages_programmatically (
           g_object_ref (tab_label);
           GtkNotebook * new_notebook =
             on_create_window (
-              old_notebook, page, 12, 12, data);
+              old_notebook, page, data);
           gtk_notebook_detach_tab (
             old_notebook, page);
           gtk_notebook_append_page (
@@ -1379,6 +1397,7 @@ z_gtk_notebook_make_detachable (
   GtkNotebook * notebook,
   GtkWindow *   parent_window)
 {
+  g_return_if_fail (GTK_IS_NOTEBOOK (notebook));
   DetachableNotebookData * data =
     object_new (DetachableNotebookData);
   data->notebook = notebook;
@@ -1838,19 +1857,29 @@ z_gtk_dialog_run (
   return ri.response_id;
 }
 
+/**
+ * The popover must already exist as a children
+ * of its intended widget (or a common parent).
+ *
+ * This function will set the new menu and show it.
+ */
 void
 z_gtk_show_context_menu_from_g_menu (
-  GtkWidget * widget,
-  GMenu *     menu)
+  GtkPopoverMenu * popover_menu,
+  double           x,
+  double           y,
+  GMenu *          menu)
 {
-  GtkPopoverMenu * popover_menu =
-    GTK_POPOVER_MENU (
-      gtk_popover_menu_new_from_model (
-        G_MENU_MODEL (menu)));
-  if (widget)
-    gtk_widget_set_parent (
-      GTK_WIDGET (popover_menu), widget);
-  gtk_popover_present (
+  g_return_if_fail (
+    GTK_IS_POPOVER_MENU (popover_menu));
+  gtk_popover_menu_set_menu_model (
+    popover_menu, G_MENU_MODEL (menu));
+  gtk_popover_set_pointing_to (
+    GTK_POPOVER (popover_menu),
+    &Z_GDK_RECTANGLE_INIT_UNIT ((int) x, (int) y));
+  /*gtk_popover_set_has_arrow (*/
+    /*GTK_POPOVER (popover_menu), false);*/
+  gtk_popover_popup (
     GTK_POPOVER (popover_menu));
 }
 

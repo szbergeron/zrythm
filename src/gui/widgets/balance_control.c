@@ -320,7 +320,9 @@ drag_end (
 
 static void
 show_context_menu (
-  BalanceControlWidget * self)
+  BalanceControlWidget * self,
+  double                 x,
+  double                 y)
 {
   g_return_if_fail (self->port);
 
@@ -342,7 +344,7 @@ show_context_menu (
   g_menu_append_item (menu, menuitem);
 
   z_gtk_show_context_menu_from_g_menu (
-    GTK_WIDGET (self), menu);
+    self->popover_menu, x, y, menu);
 }
 
 static void
@@ -355,7 +357,7 @@ on_right_click (
 {
   if (n_press == 1)
     {
-      show_context_menu (self);
+      show_context_menu (self, x, y);
     }
 }
 
@@ -443,6 +445,10 @@ balance_control_widget_init (
     &self->start_color, "rgba(0%,100%,0%,1.0)");
   gdk_rgba_parse (
     &self->end_color, "rgba(0%,50%,50%,1.0)");
+
+  self->popover_menu =
+    GTK_POPOVER_MENU (
+      gtk_popover_menu_new_from_model (NULL));
 
   gtk_widget_set_margin_start (
     GTK_WIDGET (self), 2);
